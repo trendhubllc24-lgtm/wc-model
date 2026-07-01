@@ -22,7 +22,7 @@ const TEAMS = [
   ["🇵🇦", "Panama", 1680], ["🇸🇦", "Saudi Arabia", 1675], ["🇶🇦", "Qatar", 1655],
   ["🇺🇿", "Uzbekistan", 1630], ["🇯🇴", "Jordan", 1625], ["🇨🇻", "Cape Verde", 1615],
   ["🇭🇹", "Haiti", 1550], ["🇳🇿", "New Zealand", 1520], ["🇨🇼", "Curaçao", 1500],
-].map(([flag, name, elo]) => ({ flag, name, elo }));
+].map(([flag, name, elo]) => ({ flag, name, elo })).sort((a, b) => a.name.localeCompare(b.name));
 // ESPN sometimes uses a different name than our list (e.g. "United States"
 // instead of "USA"). This maps the common variants so a live match always
 // resolves — and byName() never returns undefined, so a mismatched name can
@@ -284,6 +284,10 @@ export default function MatchModel() {
   const schedule = (live && live.schedule) || SCHEDULE;
   const qualified = (live && live.qualified) || R16_QUALIFIED;
   const r16fx = (live && live.r16) || R16_FIXTURES;
+  const qfFx = (live && live.qf) || [];
+  const sfFx = (live && live.sf) || [];
+  const thirdFx = (live && live.third) || [];
+  const finalFx = (live && live.final) || [];
 
   const venueLabel = venue === "A" ? `${A.name} home` : venue === "B" ? `${B.name} home` : "neutral";
   const call = s.pA > s.pB && s.pA > s.pD ? A.name : s.pB > s.pA && s.pB > s.pD ? B.name : "too close";
@@ -518,8 +522,8 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>
 
           {ttab === "upcoming" && (<>
-            <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Next few days · tap any match to load it into the model.</div>
-            {schedule.slice(0, 6).map((fx, k) => (
+            <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Every confirmed game still to come · tap any match to load it into the model.</div>
+            {schedule.map((fx, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
                 <div className="when">{fx.day}<br />{fx.time}</div>
                 <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
@@ -546,15 +550,19 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           {ttab === "bracket" && (<div className="brk">
             <h5>Into the Round of 16</h5>
             <div className="chips">{qualified.map((t, k) => <span className="qchip" key={k}>{flag(t)} {t}</span>)}</div>
-            {r16fx.length > 0 && (<>
-              <h5>Round of 16 — confirmed ties</h5>
-              {r16fx.map((m, k) => (
-                <div className="r16row" key={k} onClick={() => byName(m.a) && byName(m.b) && loadFixture(m)} style={{ cursor: byName(m.a) && byName(m.b) ? "pointer" : "default", flexWrap: "wrap" }}>
-                  <div className="t">{flag(m.a)} {disp(m.a)}</div><div className="mid">vs</div><div className="t">{flag(m.b)} {disp(m.b)}</div>
-                  <div className="pl">{m.when} · {m.stad}, {m.city}</div>
+            {[["Round of 16", r16fx], ["Quarterfinals", qfFx], ["Semifinals", sfFx], ["Third Place", thirdFx], ["Final", finalFx]].map(([title, list], gi) => (
+              list.length > 0 && (
+                <div key={gi}>
+                  <h5 style={{ marginTop: 16 }}>{title} — confirmed ties</h5>
+                  {list.map((m, k) => (
+                    <div className="r16row" key={k} onClick={() => m.decided !== false && byName(m.a) && byName(m.b) && loadFixture(m)} style={{ cursor: m.decided !== false ? "pointer" : "default", flexWrap: "wrap" }}>
+                      <div className="t">{flag(m.a)} {disp(m.a)}</div><div className="mid">vs</div><div className="t">{flag(m.b)} {disp(m.b)}</div>
+                      <div className="pl">{m.when} · {m.stad}, {m.city}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </>)}
+              )
+            ))}
             <h5 style={{ marginTop: 16 }}>Round of 32 — still to play</h5>
             {schedule.map((fx, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
@@ -660,6 +668,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           <button className={tab === "scorers" ? "on" : ""} onClick={() => setTab("scorers")}>Goalscorers</button>
           <button className={tab === "h2h" ? "on" : ""} onClick={() => setTab("h2h")}>Head-to-head</button>
           <button className={tab === "matrix" ? "on" : ""} onClick={() => setTab("matrix")}>Score matrix</button>
+          <button className={tab === "track" ? "on" : ""} onClick={() => setTab("track")}>Track record</button>
           <button className={tab === "readout" ? "on" : ""} onClick={() => setTab("readout")}>Readout</button>
         </div>
 
@@ -790,6 +799,50 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
               ])}
             </div>
             <div className="axname"><span>rows <b>{A.flag} {A.name}</b> goals</span><span>· cols <b>{B.flag} {B.name}</b> goals</span><span>· amber = most likely</span></div>
+          </div>
+        )}
+
+        {tab === "track" && (
+          <div className="card">
+            {(() => {
+              const trk = live && live.track;
+              if (!trk || trk.total === 0) {
+                return (
+                  <div className="empty" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
+                    No graded predictions yet. Every match the model forecasts from here
+                    forward gets logged automatically the moment it appears on the schedule,
+                    then graded pass/fail the moment it finishes — nobody enters anything by
+                    hand. Check back once a few matches have been played.
+                  </div>
+                );
+              }
+              const acc = trk.accuracy;
+              const accColor = acc >= 0.6 ? MINT : acc >= 0.45 ? AMBER : CORAL;
+              return (<>
+                <div style={{ display: "flex", gap: 26, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                  <div><div className="bigp" style={{ color: MINT, fontSize: 40 }}>{trk.correct}</div><div className="note" style={{ margin: 0 }}>correct</div></div>
+                  <div><div className="bigp" style={{ color: CORAL, fontSize: 40 }}>{trk.incorrect}</div><div className="note" style={{ margin: 0 }}>incorrect</div></div>
+                  <div><div className="bigp" style={{ color: accColor, fontSize: 40 }}>{Math.round(acc * 100)}%</div><div className="note" style={{ margin: 0 }}>hit rate · {trk.total} graded</div></div>
+                </div>
+                <div className="riskbar" style={{ marginTop: 4 }}>
+                  <div className="rf2" style={{ width: `${acc * 100}%`, background: accColor, opacity: 0.85 }} />
+                </div>
+                <div className="note" style={{ marginTop: 14, marginBottom: 10 }}>
+                  "Correct" = the model's highest-probability pick (win/draw/win) matched the actual
+                  90-minute result. Most recent first.
+                </div>
+                {trk.history.map((p, k) => (
+                  <div className="fxrow" key={k} style={{ cursor: "default", borderColor: p.correct ? MINT + "55" : CORAL + "55" }}>
+                    <div className="when" style={{ color: p.correct ? MINT : CORAL, fontWeight: 700 }}>{p.correct ? "✓ hit" : "✗ miss"}</div>
+                    <div className="match">
+                      {flag(p.a)} {disp(p.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(p.b)} {disp(p.b)}
+                      <div className="go" style={{ color: "var(--dim)" }}>final {p.finalScore} · picked {p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "draw"}</div>
+                    </div>
+                    <div className="place">{new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                  </div>
+                ))}
+              </>);
+            })()}
           </div>
         )}
 

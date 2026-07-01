@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { getEspnSlate, getEspnH2H, buildBracket, extractLiveGames, getPolymarket, getKalshi } from "@/lib/sources";
+import { getEspnSlate, getEspnH2H, buildBracket, extractLiveGames, getPolymarket, getKalshi, updateTrackRecord } from "@/lib/sources";
 
 const redis = Redis.fromEnv(); // reads UPSTASH_REDIS_REST_URL + _TOKEN
 
@@ -19,10 +19,11 @@ export async function GET(req) {
       getEspnSlate(),
       getPolymarket("world-cup-winner"),
       getPolymarket("world-cup-golden-boot-winner"),
-      getKalshi("KXWORLDCUP"),
+      getKalshi("KXMENWORLDCUP-26"),
     ]);
-    const { qualified, r16 } = await buildBracket(slate);
+    const { qualified, r16, qf, sf, third, final } = await buildBracket(slate);
     const live = extractLiveGames(slate);
+    const track = await updateTrackRecord(redis, slate);
 
     const upcoming = slate.filter((g) => g.state === "pre");
     const schedule = upcoming.map((g) => ({
@@ -31,9 +32,16 @@ export async function GET(req) {
       a: g.home, b: g.away, city: g.city, stad: g.venue, round: g.round,
     }));
 
-    // winner rows shaped as [flagLabel, polyPct, kalshiPct] to match the UI
-    const kByName = Object.fromEntries(winnerKalshi.map((k) => [k.label, Math.round(k.prob * 100)]));
-    const winner = winnerPoly.slice(0, 6).map((p) => [p.label, Math.round(p.prob * 100), kByName[p.label] ?? "—"]);
+    // Merge Polymarket + Kalshi by country name. Normalize both sides (trim,
+    // lowercase) so small formatting differences ("France" vs "France ") don't
+    // silently drop a match — this is what caused Kalshi numbers to go missing.
+    const cleanLabel = (s) => (s || "").replace(/[^\p{L}\s]/gu, "").trim().toLowerCase();
+    const kByName = {};
+    for (const k of winnerKalshi) kByName[cleanLabel(k.label)] = Math.round(k.prob * 100);
+    const winner = winnerPoly.slice(0, 6).map((p) => {
+      const kMatch = kByName[cleanLabel(p.label)];
+      return [p.label, Math.round(p.prob * 100), kMatch ?? "—"];
+    });
     const boot = bootPoly.slice(0, 4).map((p) => [p.label, Math.round(p.prob * 100)]);
 
     // head-to-head keyed "TeamA|TeamB" (alphabetical), same as the frontend
@@ -44,7 +52,7 @@ export async function GET(req) {
       updatedAt: new Date().toISOString(),
       asOf: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       note: "Auto-updated from ESPN + Polymarket + Kalshi.",
-      winner, boot, schedule, qualified, r16, h2h, live,
+      winner, boot, schedule, qualified, r16, qf, sf, third, final, h2h, live, track,
     };
     await redis.set("wc-snapshot", snapshot);
     return Response.json({ ok: true, updatedAt: snapshot.updatedAt });
