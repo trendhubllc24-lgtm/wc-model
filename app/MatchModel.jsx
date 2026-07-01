@@ -205,6 +205,17 @@ export default function MatchModel() {
     return () => { ok = false; };
   }, []);
 
+  // ---- live scores: poll a lightweight always-fresh endpoint every 25s ----
+  const [liveGames, setLiveGames] = useState([]);
+  useEffect(() => {
+    let ok = true;
+    const pull = () => fetch("/api/live").then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (ok && d && d.live) setLiveGames(d.live); }).catch(() => {});
+    pull();
+    const id = setInterval(pull, 25000);
+    return () => { ok = false; clearInterval(id); };
+  }, []);
+
   const M = useMemo(() => {
     const [lA, lB, diff] = deriveLambdas(rA, rB, venue);
     const grid = buildGrid(lA, lB);
@@ -214,14 +225,34 @@ export default function MatchModel() {
   }, [rA, rB, venue, mode, nonce]);
   const { lA, lB, diff, grid, s } = M;
 
+  // Monte Carlo involves Math.random() — run it client-side only, after mount,
+  // so the server-rendered HTML and the browser's first render always match.
   const [advA, setAdvA] = useState(null);
   useEffect(() => {
-    if (mode === "knockout") {
-      setAdvA(monteCarloAdvance(lA, lB, diff));
-    } else {
-      setAdvA(null);
-    }
+    if (mode === "knockout") setAdvA(monteCarloAdvance(lA, lB, diff));
+    else setAdvA(null);
   }, [lA, lB, diff, mode]);
+
+  // If the loaded matchup is currently being played, recompute win probability
+  // live from the CURRENT score + time remaining instead of the pre-match read.
+  const liveMatch = liveGames.find((g) => (g.a === teamA && g.b === teamB) || (g.a === teamB && g.b === teamA));
+  const liveModel = useMemo(() => {
+    if (!liveMatch) return null;
+    const flipped = liveMatch.a === teamB; // ESPN's home/away may not match our A/B order
+    const curA = flipped ? liveMatch.bScore : liveMatch.aScore;
+    const curB = flipped ? liveMatch.aScore : liveMatch.bScore;
+    const minutesPlayed = Math.min(90, (liveMatch.period === 2 ? 45 : 0) + (parseInt(liveMatch.clock) || 0));
+    const fracLeft = Math.max(0.02, (90 - minutesPlayed) / 90);
+    const rlA = lA * fracLeft, rlB = lB * fracLeft;      // remaining expected goals
+    const rGrid = buildGrid(Math.max(0.05, rlA), Math.max(0.05, rlB));
+    // convolve the current score with the remaining-time grid
+    let pA = 0, pD = 0, pB = 0;
+    for (let i = 0; i <= MAXG; i++) for (let j = 0; j <= MAXG; j++) {
+      const fi = curA + i, fj = curB + j, p = rGrid[i][j];
+      if (fi > fj) pA += p; else if (fi < fj) pB += p; else pD += p;
+    }
+    return { curA, curB, minutesPlayed, pA, pD, pB, clock: liveMatch.clock };
+  }, [liveMatch, lA, lB]);
 
   const refresh = () => {
     setNonce((n) => n + 1);
@@ -521,6 +552,26 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>)}
         </div>
 
+        {/* ===================== LIVE NOW ===================== */}
+        {liveGames.length > 0 && (
+          <div className="card" style={{ borderColor: CORAL }}>
+            <div className="snaphead">
+              <h3 style={{ color: CORAL }}>● Live now</h3>
+              <span className="note" style={{ margin: 0 }}>auto-updates every 25s</span>
+            </div>
+            {liveGames.map((g, k) => (
+              <div className="fxrow" key={k} onClick={() => loadFixture(g)} style={{ borderColor: CORAL + "55" }}>
+                <div className="when" style={{ color: CORAL, fontWeight: 700 }}>{g.clock || "LIVE"}</div>
+                <div className="match">
+                  {flag(g.a)} {g.a} <b>{g.aScore}</b> <span style={{ color: "var(--dim)" }}>–</span> <b>{g.bScore}</b> {g.b} {flag(g.b)}
+                  <div className="go">tap for live win prob →</div>
+                </div>
+                <div className="place">{g.city}<br />{g.stad}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ===================== MATCH SETUP ===================== */}
         <div className="card">
           <div className="setup">
@@ -554,18 +605,34 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
 
         {/* headline */}
         <div className="card">
+          {liveModel && (
+            <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}>● live · {liveModel.clock || "in play"}</span>
+                <span style={{ fontFamily: "'Bricolage Grotesque'", fontWeight: 800, fontSize: 20 }}>{A.name} {liveModel.curA} – {liveModel.curB} {B.name}</span>
+              </div>
+              <div className="note" style={{ marginTop: 8, marginBottom: 6 }}>Win probability recalculated from the current score + time remaining — not the pre-match forecast.</div>
+              <div className="bar">
+                <span style={{ width: `${liveModel.pA * 100}%`, background: MINT }}>{liveModel.pA > 0.12 ? p1(liveModel.pA) : ""}</span>
+                <span style={{ width: `${liveModel.pD * 100}%`, background: "#3a5f68", color: "#dff5ee" }}>{liveModel.pD > 0.12 ? p1(liveModel.pD) : ""}</span>
+                <span style={{ width: `${liveModel.pB * 100}%`, background: CORAL }}>{liveModel.pB > 0.12 ? p1(liveModel.pB) : ""}</span>
+              </div>
+              <div className="barlabels"><span>{A.name} win</span><span>draw</span><span>{B.name} win</span></div>
+            </div>
+          )}
           <div className="bar">
             <span style={{ width: `${s.pA * 100}%`, background: MINT }}>{s.pA > 0.12 ? p1(s.pA) : ""}</span>
             <span style={{ width: `${s.pD * 100}%`, background: "#3a5f68", color: "#dff5ee" }}>{s.pD > 0.12 ? p1(s.pD) : ""}</span>
             <span style={{ width: `${s.pB * 100}%`, background: CORAL }}>{s.pB > 0.12 ? p1(s.pB) : ""}</span>
           </div>
-          <div className="barlabels"><span>{A.flag} {A.name} win</span><span>draw</span><span>{B.name} win {B.flag}</span></div>
+          <div className="barlabels"><span>{A.flag} {A.name} win{liveModel ? " (pre-match)" : ""}</span><span>draw</span><span>{B.name} win {B.flag}</span></div>
           <div className="xgrow">
             <div className="xg"><div className="n" style={{ color: MINT }}>{lA.toFixed(2)}</div><div className="l">{A.name} xG</div></div>
             <div style={{ textAlign: "center" }}><div className="dash">{Math.round(lA)}–{Math.round(lB)}</div><div className="proj">peak {s.peak.i}–{s.peak.j} ({Math.round(s.peak.p * 100)}%)</div></div>
             <div className="xg"><div className="n" style={{ color: CORAL }}>{lB.toFixed(2)}</div><div className="l">{B.name} xG</div></div>
           </div>
-{mode === "knockout" && advA !== null && (<div style={{ marginTop: 18 }}>            <div className="bar"><span style={{ width: `${advA * 100}%`, background: MINT }}>{advA > 0.12 ? p1(advA) : ""}</span><span style={{ width: `${(1 - advA) * 100}%`, background: CORAL }}>{(1 - advA) > 0.12 ? p1(1 - advA) : ""}</span></div>
+          {mode === "knockout" && advA !== null && (<div style={{ marginTop: 18 }}>
+            <div className="bar"><span style={{ width: `${advA * 100}%`, background: MINT }}>{advA > 0.12 ? p1(advA) : ""}</span><span style={{ width: `${(1 - advA) * 100}%`, background: CORAL }}>{(1 - advA) > 0.12 ? p1(1 - advA) : ""}</span></div>
             <div className="barlabels"><span>{A.name} advances</span><span>{B.name} advances</span></div>
           </div>)}
         </div>
