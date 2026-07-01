@@ -23,8 +23,25 @@ const TEAMS = [
   ["🇺🇿", "Uzbekistan", 1630], ["🇯🇴", "Jordan", 1625], ["🇨🇻", "Cape Verde", 1615],
   ["🇭🇹", "Haiti", 1550], ["🇳🇿", "New Zealand", 1520], ["🇨🇼", "Curaçao", 1500],
 ].map(([flag, name, elo]) => ({ flag, name, elo }));
-const byName = (n) => TEAMS.find((t) => t.name === n);
-const flag = (n) => (byName(n) ? byName(n).flag : "");
+// ESPN sometimes uses a different name than our list (e.g. "United States"
+// instead of "USA"). This maps the common variants so a live match always
+// resolves — and byName() never returns undefined, so a mismatched name can
+// never crash the page.
+const NAME_ALIASES = {
+  "United States": "USA", "USMNT": "USA",
+  "Bosnia and Herzegovina": "Bosnia", "Bosnia-Herzegovina": "Bosnia",
+  "Korea Republic": "Korea Rep.", "South Korea": "Korea Rep.",
+  "IR Iran": "Iran", "Côte d'Ivoire": "Ivory Coast", "Cote d'Ivoire": "Ivory Coast",
+  "DR Congo": "Congo DR", "Congo DR": "Congo DR", "Congo-Kinshasa": "Congo DR",
+  "Türkiye": "Türkiye", "Turkey": "Türkiye",
+  "England": "England", "Saudi Arabia": "Saudi Arabia",
+};
+const norm = (n) => NAME_ALIASES[n] || n;
+const byName = (n) => TEAMS.find((t) => t.name === norm(n)) || { flag: "🏳️", name: n, elo: 1700 };
+const flag = (n) => byName(n).flag;
+// Display helper: show our short canonical name ("USA") whenever we recognize
+// the team, even if the raw source text was longer ("United States").
+const disp = (n) => { const t = TEAMS.find((x) => x.name === norm(n)); return t ? t.name : n; };
 
 /* KEY SCORERS: ["name", share of team's expected goals] */
 const SCORERS = {
@@ -191,8 +208,8 @@ export default function MatchModel() {
   const [player, setPlayer] = useState("");
   const [betMkt, setBetMkt] = useState("");
 
-  const pickA = (n) => { setA(n); setRA(byName(n).elo); };
-  const pickB = (n) => { setB(n); setRB(byName(n).elo); };
+  const pickA = (n) => { const nn = norm(n); setA(nn); setRA(byName(nn).elo); };
+  const pickB = (n) => { const nn = norm(n); setB(nn); setRB(byName(nn).elo); };
   const loadFixture = (fx) => { pickA(fx.a); pickB(fx.b); setVenue("neutral"); setMode("knockout"); setTab("risk"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const A = byName(teamA), B = byName(teamB);
 
@@ -505,7 +522,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
             {schedule.slice(0, 6).map((fx, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
                 <div className="when">{fx.day}<br />{fx.time}</div>
-                <div className="match">{flag(fx.a)} {fx.a} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {fx.b}<div className="go">tap to model →</div></div>
+                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
                 <div className="place">{fx.city}<br />{fx.stad}</div>
               </div>
             ))}
@@ -520,7 +537,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
             {schedule.map((fx, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
                 <div className="when">{fx.day}<br />{fx.time}</div>
-                <div className="match">{flag(fx.a)} {fx.a} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {fx.b}<div className="go">tap to model →</div></div>
+                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
                 <div className="place">{fx.city}<br />{fx.stad}</div>
               </div>
             ))}
@@ -533,7 +550,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
               <h5>Round of 16 — confirmed ties</h5>
               {r16fx.map((m, k) => (
                 <div className="r16row" key={k} onClick={() => byName(m.a) && byName(m.b) && loadFixture(m)} style={{ cursor: byName(m.a) && byName(m.b) ? "pointer" : "default", flexWrap: "wrap" }}>
-                  <div className="t">{flag(m.a)} {m.a}</div><div className="mid">vs</div><div className="t">{flag(m.b)} {m.b}</div>
+                  <div className="t">{flag(m.a)} {disp(m.a)}</div><div className="mid">vs</div><div className="t">{flag(m.b)} {disp(m.b)}</div>
                   <div className="pl">{m.when} · {m.stad}, {m.city}</div>
                 </div>
               ))}
@@ -542,7 +559,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
             {schedule.map((fx, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
                 <div className="when">{fx.day}</div>
-                <div className="match">{flag(fx.a)} {fx.a} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {fx.b}</div>
+                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}</div>
                 <div className="place">{fx.city}</div>
               </div>
             ))}
@@ -563,7 +580,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
               <div className="fxrow" key={k} onClick={() => loadFixture(g)} style={{ borderColor: CORAL + "55" }}>
                 <div className="when" style={{ color: CORAL, fontWeight: 700 }}>{g.clock || "LIVE"}</div>
                 <div className="match">
-                  {flag(g.a)} {g.a} <b>{g.aScore}</b> <span style={{ color: "var(--dim)" }}>–</span> <b>{g.bScore}</b> {g.b} {flag(g.b)}
+                  {flag(g.a)} {disp(g.a)} <b>{g.aScore}</b> <span style={{ color: "var(--dim)" }}>–</span> <b>{g.bScore}</b> {disp(g.b)} {flag(g.b)}
                   <div className="go">tap for live win prob →</div>
                 </div>
                 <div className="place">{g.city}<br />{g.stad}</div>
