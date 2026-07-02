@@ -214,6 +214,8 @@ export default function MatchModel() {
   const [matchCity, setMatchCity] = useState(null);
   const [mktAuto, setMktAuto] = useState(null); // ESPN's real odds for the loaded fixture, auto-filled
   const [nonce, setNonce] = useState(0);
+  const [trackFilter, setTrackFilter] = useState("all");
+  const [expandedMatch, setExpandedMatch] = useState(null);
   const [refreshed, setRefreshed] = useState(null);
   const [live, setLive] = useState(null);
   const [feed, setFeed] = useState("offline"); // offline | live | loading
@@ -477,9 +479,8 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .wrap{max-width:1180px;margin:0 auto}
   .layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;margin-top:20px}
   .main{min-width:0}
-  .side{position:sticky;top:20px;min-width:0}
-  .livesticky{position:sticky;top:20px;z-index:5}
-  @media(max-width:980px){.livesticky{position:relative;top:0}}
+  .side{min-width:0}
+  .livesticky{}
   @media(max-width:980px){.layout{grid-template-columns:1fr}.side{position:static}}
   .eyebrow{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.28em;color:var(--mint);text-transform:uppercase;margin-bottom:8px}
   .title{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:clamp(32px,8.5vw,54px);line-height:.92;letter-spacing:-.02em}
@@ -645,49 +646,6 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>
         )}
 
-        {/* ===================== LIVE PREDICTION TRACKER ===================== */}
-        <div className="card">
-          <h3 style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: AMBER, marginBottom: 12 }}>Live prediction tracker</h3>
-          {(() => {
-            const trk = live && live.track;
-            if (!trk || trk.total === 0) {
-              return (
-                <div className="empty" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
-                  No graded predictions yet. Every match the model forecasts from here
-                  forward gets logged automatically the moment it appears on the schedule,
-                  then graded pass/fail the moment it finishes — nobody enters anything by
-                  hand. Check back once a few matches have been played.
-                </div>
-              );
-            }
-            const acc = trk.accuracy;
-            const accColor = acc >= 0.6 ? MINT : acc >= 0.45 ? AMBER : CORAL;
-            return (<>
-              <div style={{ display: "flex", gap: 26, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
-                <div><div className="bigp" style={{ color: MINT, fontSize: 34 }}>{trk.correct}</div><div className="note" style={{ margin: 0 }}>correct</div></div>
-                <div><div className="bigp" style={{ color: CORAL, fontSize: 34 }}>{trk.incorrect}</div><div className="note" style={{ margin: 0 }}>incorrect</div></div>
-                <div><div className="bigp" style={{ color: accColor, fontSize: 34 }}>{Math.round(acc * 100)}%</div><div className="note" style={{ margin: 0 }}>hit rate · {trk.total} graded</div></div>
-              </div>
-              <div className="riskbar" style={{ marginTop: 4 }}>
-                <div className="rf2" style={{ width: `${acc * 100}%`, background: accColor, opacity: 0.85 }} />
-              </div>
-              <div className="note" style={{ marginTop: 14, marginBottom: 10 }}>
-                "Correct" = the model's highest-probability pick (win/draw/win) matched the actual
-                90-minute result. Most recent first.
-              </div>
-              {trk.history.slice(0, 6).map((p, k) => (
-                <div className="fxrow" key={k} style={{ cursor: "default", borderColor: p.correct ? MINT + "55" : CORAL + "55" }}>
-                  <div className="when" style={{ color: p.correct ? MINT : CORAL, fontWeight: 700 }}>{p.correct ? "✓ hit" : "✗ miss"}</div>
-                  <div className="match">
-                    {flag(p.a)} {disp(p.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(p.b)} {disp(p.b)}
-                    <div className="go" style={{ color: "var(--dim)" }}>final {p.finalScore} · picked {p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "draw"}</div>
-                  </div>
-                  <div className="place">{new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-                </div>
-              ))}
-            </>);
-          })()}
-        </div>
 
         {/* ===================== MATCH SETUP ===================== */}
         <div className="card">
@@ -892,6 +850,78 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
         )}
 
         </div>
+        {/* ===================== LIVE PREDICTION TRACKER ===================== */}
+        <div className="card">
+          <h3 style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: AMBER, marginBottom: 12 }}>Live prediction tracker</h3>
+          {(() => {
+            const trk = live && live.track;
+            if (!trk || trk.total === 0) {
+              return (
+                <div className="empty" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
+                  No graded predictions yet. Every match the model forecasts from here
+                  forward gets logged automatically the moment it appears on the schedule,
+                  then graded pass/fail the moment it finishes — nobody enters anything by
+                  hand. Check back once a few matches have been played.
+                </div>
+              );
+            }
+            const acc = trk.accuracy;
+            const accColor = acc >= 0.6 ? MINT : acc >= 0.45 ? AMBER : CORAL;
+            const filtered = trk.history.filter((p) =>
+              trackFilter === "all" ? true : trackFilter === "hits" ? p.correct : !p.correct
+            );
+            return (<>
+              <div style={{ display: "flex", gap: 26, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                <div><div className="bigp" style={{ color: MINT, fontSize: 34 }}>{trk.correct}</div><div className="note" style={{ margin: 0 }}>correct</div></div>
+                <div><div className="bigp" style={{ color: CORAL, fontSize: 34 }}>{trk.incorrect}</div><div className="note" style={{ margin: 0 }}>incorrect</div></div>
+                <div><div className="bigp" style={{ color: accColor, fontSize: 34 }}>{Math.round(acc * 100)}%</div><div className="note" style={{ margin: 0 }}>hit rate · {trk.total} graded</div></div>
+              </div>
+              <div className="riskbar" style={{ marginTop: 4 }}>
+                <div className="rf2" style={{ width: `${acc * 100}%`, background: accColor, opacity: 0.85 }} />
+              </div>
+              <div className="note" style={{ marginTop: 10, marginBottom: 4 }}>
+                Currently tracking the Elo+Poisson baseline model only — a second model's picks
+                will appear side-by-side here once it's wired into live grading.
+              </div>
+              <div className="subtabs" style={{ marginTop: 12 }}>
+                {[["all", "All"], ["hits", "Hits"], ["misses", "Misses"]].map(([v, label]) => (
+                  <button key={v} className={trackFilter === v ? "on" : ""} onClick={() => setTrackFilter(v)}>{label}</button>
+                ))}
+              </div>
+              <div className="note" style={{ marginTop: 10, marginBottom: 10 }}>
+                "Correct" = the model's highest-probability pick (win/draw/win) matched the actual
+                90-minute result. Most recent first — tap a match for detail.
+              </div>
+              {filtered.length === 0 && <div className="empty">No {trackFilter} in the graded history yet.</div>}
+              {filtered.slice(0, 20).map((p, k) => {
+                const isOpen = expandedMatch === p.id;
+                return (
+                  <div key={k}>
+                    <div
+                      className="fxrow"
+                      style={{ borderColor: p.correct ? MINT + "55" : CORAL + "55" }}
+                      onClick={() => setExpandedMatch(isOpen ? null : p.id)}
+                    >
+                      <div className="when" style={{ color: p.correct ? MINT : CORAL, fontWeight: 700 }}>{p.correct ? "✓ hit" : "✗ miss"}</div>
+                      <div className="match">
+                        {flag(p.a)} {disp(p.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(p.b)} {disp(p.b)}
+                        <div className="go" style={{ color: "var(--dim)" }}>final {p.finalScore} · picked {p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "draw"} {isOpen ? "▲" : "▼"}</div>
+                      </div>
+                      <div className="place">{new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                    </div>
+                    {isOpen && (
+                      <div className="evbox" style={{ marginTop: -4, marginBottom: 8 }}>
+                        <div style={{ marginBottom: 6 }}><b>{disp(p.a)}</b> win: {Math.round((p.pA ?? 0) * 100)}% · <b>Draw</b>: {Math.round((p.pD ?? 0) * 100)}% · <b>{disp(p.b)}</b> win: {Math.round((p.pB ?? 0) * 100)}%</div>
+                        <div style={{ color: "var(--dim)" }}>Baseline (Elo+Poisson) pick: <b>{p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "Draw"}</b> · Actual result: <b>{p.actual === "A" ? disp(p.a) : p.actual === "B" ? disp(p.b) : "Draw"}</b></div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>);
+          })()}
+        </div>
+
         {/* end .main */}
 
         <aside className="side">
