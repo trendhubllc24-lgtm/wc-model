@@ -183,18 +183,36 @@ const overFrom = (arr, line) => { let s = 0; for (let k = Math.ceil(line); k < a
 const MINT = "#4FD8B0", CORAL = "#FF6B5C", AMBER = "#F2C14E";
 const p1 = (x) => (x * 100).toFixed(1) + "%";
 
+// 2026 World Cup host cities → host nation, used to auto-detect home advantage.
+// A team only gets "home" status if it's one of the three co-hosts AND the
+// fixture is actually being played in that host nation.
+const CITY_COUNTRY = {
+  Atlanta: "USA", Seattle: "USA", "Santa Clara": "USA", "Los Angeles": "USA",
+  Miami: "USA", "Kansas City": "USA", Dallas: "USA", "East Rutherford": "USA",
+  Foxborough: "USA", Philadelphia: "USA", Houston: "USA", "San Francisco Bay Area": "USA",
+  "New York/NJ": "USA", "Inglewood": "USA",
+  Toronto: "Canada", Vancouver: "Canada",
+  "Mexico City": "Mexico", Guadalajara: "Mexico", Monterrey: "Mexico",
+};
+const HOST_TEAMS = ["USA", "Canada", "Mexico"];
+function autoVenue(city, tA, tB) {
+  const country = CITY_COUNTRY[city];
+  if (!country) return "neutral";
+  if (tA === country && HOST_TEAMS.includes(tA)) return "A";
+  if (tB === country && HOST_TEAMS.includes(tB)) return "B";
+  return "neutral";
+}
+
 export default function MatchModel() {
   const [teamA, setA] = useState("Belgium");
   const [teamB, setB] = useState("Senegal");
   const [rA, setRA] = useState(byName("Belgium").elo);
   const [rB, setRB] = useState(byName("Senegal").elo);
-  const [venue, setVenue] = useState("neutral");
   const [mode, setMode] = useState("knockout");
   const [tab, setTab] = useState("risk");
   const [ttab, setTtab] = useState("upcoming");
-  const [showTune, setShowTune] = useState(false);
-  const [showMkt, setShowMkt] = useState(false);
-  const [mkt, setMkt] = useState({ a: "", d: "", b: "", o25: "", adv: "" });
+  const [matchCity, setMatchCity] = useState(null);
+  const [mktAuto, setMktAuto] = useState(null); // ESPN's real odds for the loaded fixture, auto-filled
   const [nonce, setNonce] = useState(0);
   const [refreshed, setRefreshed] = useState(null);
   const [live, setLive] = useState(null);
@@ -206,12 +224,21 @@ export default function MatchModel() {
   const [ouLine, setOuLine] = useState(2.5); const [ouSide, setOuSide] = useState("over");
   const [ttTeam, setTtTeam] = useState("A"); const [ttLine, setTtLine] = useState(1.5);
   const [player, setPlayer] = useState("");
-  const [betMkt, setBetMkt] = useState("");
 
   const pickA = (n) => { const nn = norm(n); setA(nn); setRA(byName(nn).elo); };
   const pickB = (n) => { const nn = norm(n); setB(nn); setRB(byName(nn).elo); };
-  const loadFixture = (fx) => { pickA(fx.a); pickB(fx.b); setVenue("neutral"); setMode("knockout"); setTab("risk"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const loadFixture = (fx) => {
+    pickA(fx.a); pickB(fx.b);
+    setMatchCity(fx.city || null);
+    setMode(fx.round && /group/i.test(fx.round) ? "group" : "knockout");
+    setMktAuto((fx.homeML || fx.drawML || fx.awayML || fx.overUnder)
+      ? { a: fx.homeML, d: fx.drawML, b: fx.awayML, o25: fx.overUnder } : null);
+    setTab("risk");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const A = byName(teamA), B = byName(teamB);
+  // Venue auto-derives from the loaded fixture's city — nothing to pick manually.
+  const venue = autoVenue(matchCity, teamA, teamB);
 
   // ---- backend wiring: pull live snapshot on load (falls back to embedded) ----
   useEffect(() => {
@@ -271,7 +298,7 @@ export default function MatchModel() {
   // minutesPlayed advances every second locally (from `tick`), anchored to the
   // real ESPN clock at the last sync — so it's live-feeling but never drifts
   // far from the truth before the next 10s correction.
-  const liveMatch = liveGames.find((g) => (g.a === teamA && g.b === teamB) || (g.a === teamB && g.b === teamA));
+  const liveMatch = liveGames.find((g) => (norm(g.a) === teamA && norm(g.b) === teamB) || (norm(g.a) === teamB && norm(g.b) === teamA));
   const liveModel = useMemo(() => {
     if (!liveMatch) return null;
     const flipped = liveMatch.a === teamB; // ESPN's home/away may not match our A/B order
@@ -325,7 +352,9 @@ export default function MatchModel() {
 
   const venueLabel = venue === "A" ? `${A.name} home` : venue === "B" ? `${B.name} home` : "neutral";
   const call = s.pA > s.pB && s.pA > s.pD ? A.name : s.pB > s.pA && s.pB > s.pD ? B.name : "too close";
-  const mk = { a: impliedProb(mkt.a), d: impliedProb(mkt.d), b: impliedProb(mkt.b), o25: impliedProb(mkt.o25), adv: impliedProb(mkt.adv) };
+  const mk = mktAuto
+    ? { a: impliedProb(mktAuto.a), d: impliedProb(mktAuto.d), b: impliedProb(mktAuto.b), o25: impliedProb(mktAuto.o25), adv: null }
+    : { a: null, d: null, b: null, o25: null, adv: null };
   const edge = (model, m) => (m == null ? "" : `  market ${Math.round(m * 100)}%  edge ${(model * 100 - m * 100 >= 0 ? "+" : "")}${(model * 100 - m * 100).toFixed(1)}`);
 
   const Lr = (label, val, extra = "") => `${label.padEnd(20)}${p1(val).padStart(6)}${extra}`;
@@ -411,9 +440,20 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   const R = resolveBet();
   const risk = 1 - R.p;
   const band = R.p >= 0.65 ? { l: "Safe", c: MINT } : R.p >= 0.40 ? { l: "Moderate", c: AMBER } : { l: "High risk", c: CORAL };
-  const bImp = impliedProb(betMkt);
+  // Auto-pick the matching real market line for whichever bet is selected —
+  // no typing required. Only a few bet types have a direct ESPN market to
+  // compare against; the rest just won't show an edge, which is honest.
+  const autoBetOdds = (() => {
+    if (!mktAuto) return null;
+    if (bet === "winA") return mktAuto.a;
+    if (bet === "draw") return mktAuto.d;
+    if (bet === "winB") return mktAuto.b;
+    if (bet === "ou" && ouSide === "over" && ouLine === 2.5) return mktAuto.o25;
+    return null;
+  })();
+  const bImp = impliedProb(autoBetOdds);
   const bEdge = bImp == null ? null : R.p - bImp;
-  const bProfit = betMkt ? (parseFloat(betMkt) >= 0 ? parseFloat(betMkt) / 100 : 100 / -parseFloat(betMkt)) : null;
+  const bProfit = autoBetOdds ? (parseFloat(autoBetOdds) >= 0 ? parseFloat(autoBetOdds) / 100 : 100 / -parseFloat(autoBetOdds)) : null;
   const bEV = bProfit == null ? null : R.p * bProfit - (1 - R.p);
 
   const h2h = HEAD2HEAD[h2hKey(teamA, teamB)] || (live && live.h2h && live.h2h[h2hKey(teamA, teamB)]);
@@ -466,7 +506,21 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .seg button.on{background:var(--line);color:var(--ink)}
   .link{background:none;border:none;color:var(--mint);font-family:'Space Mono';font-size:11px;letter-spacing:.08em;cursor:pointer;padding:9px 4px}
   .bar{display:flex;height:34px;border-radius:9px;overflow:hidden;border:1px solid var(--line)}
-  .bar span{display:flex;align-items:center;justify-content:center;font-family:'Space Mono';font-size:12px;font-weight:700;color:#08181c;min-width:0}
+  .bar span{display:flex;align-items:center;justify-content:center;font-family:'Space Mono';font-size:12px;font-weight:700;color:#08181c;min-width:0;
+    transition:width .6s cubic-bezier(.4,0,.2,1)}
+  .autotag{font-family:'Space Mono';font-size:12px;color:var(--dim);background:var(--surf2);border:1px solid var(--line);
+    border-radius:999px;padding:8px 13px}
+  .autoodds{font-family:'Space Mono';font-size:12.5px;color:var(--dim);background:var(--surf2);border:1px solid var(--line);
+    border-radius:8px;padding:9px 10px}
+  @keyframes pulseGlow{
+    0%{box-shadow:0 0 0 0 rgba(255,107,92,.55)}
+    60%{box-shadow:0 0 0 10px rgba(255,107,92,0)}
+    100%{box-shadow:0 0 0 0 rgba(255,107,92,0)}
+  }
+  .pulsing{animation:pulseGlow 1s ease-out}
+  @keyframes dotBlink{0%,100%{opacity:1}50%{opacity:.25}}
+  .livedot{display:inline-block;width:7px;height:7px;border-radius:50%;background:${CORAL};
+    margin-right:6px;animation:dotBlink 1.1s ease-in-out infinite}
   .barlabels{display:flex;justify-content:space-between;margin-top:7px;font-family:'Space Mono';font-size:11px;color:var(--dim)}
   .xgrow{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:20px;flex-wrap:wrap}
   .xg{text-align:center}
@@ -494,6 +548,17 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .axname{display:flex;gap:8px;font-size:12px;font-family:'Space Mono';color:var(--dim);margin-top:12px;flex-wrap:wrap}
   .axname b{color:var(--ink)}
   .h2hbig{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0 4px}
+  .split{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch}
+  .splitcol{border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center;background:var(--surf2)}
+  .splitname{font-weight:700;font-size:15px;margin-bottom:8px}
+  .splitbig{font-family:'Bricolage Grotesque';font-weight:800;font-size:38px;line-height:1;
+    transition:color .3s}
+  .splitlab{font-family:'Space Mono';font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-top:3px;margin-bottom:12px}
+  .splitrow{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-top:1px solid var(--line)}
+  .splitrow span{color:var(--dim)}
+  .splitrow b{font-family:'Space Mono';font-weight:700}
+  .splitmid{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 6px;min-width:76px}
+  .splitdash{font-family:'Bricolage Grotesque';font-weight:800;font-size:24px;color:var(--ink);margin-top:14px}
   .h2hbig .num{font-family:'Bricolage Grotesque';font-weight:800;font-size:44px;line-height:1}
   .h2hbig .lab{font-family:'Space Mono';font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:center;margin-top:4px}
   .mktgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
@@ -518,7 +583,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .evbox{margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--surf2);font-size:13px;line-height:1.5}
   .evbox b{font-family:'Space Mono'}
   .disc{font-family:'Space Mono';font-size:11px;color:var(--dim);line-height:1.6;margin-top:26px;text-align:center;border-top:1px solid var(--line);padding-top:18px}
-  @media(max-width:560px){.snapgrid,.scorers,.mktgrid,.rf,.setup{}.snapgrid,.scorers,.mktgrid,.rf{grid-template-columns:1fr}.cell{font-size:9px}.prow .nm{width:88px}.fxrow .place{font-size:10px}}`;
+  @media(max-width:560px){.snapgrid,.scorers,.mktgrid,.rf,.setup{}.snapgrid,.scorers,.mktgrid,.rf{grid-template-columns:1fr}.split{grid-template-columns:1fr}.splitmid{padding:6px 0}.cell{font-size:9px}.prow .nm{width:88px}.fxrow .place{font-size:10px}}`;
 
   const seg = (val, cur, set, label) => <button className={cur === val ? "on" : ""} onClick={() => set(val)}>{label}</button>;
   const scorerCol = (team, list, color) => (
@@ -646,35 +711,28 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>
           <div className="controls">
             <div className="seg">{seg("group", mode, setMode, "Group (90')")}{seg("knockout", mode, setMode, "Knockout")}</div>
-            <div className="seg">{seg("A", venue, setVenue, `${A.flag} home`)}{seg("neutral", venue, setVenue, "Neutral")}{seg("B", venue, setVenue, `${B.flag} home`)}</div>
-            <button className="link" onClick={() => setShowTune(!showTune)}>{showTune ? "− ratings" : "+ ratings"}</button>
-            <button className="link" onClick={() => setShowMkt(!showMkt)}>{showMkt ? "− market" : "+ market odds"}</button>
+            <span className="autotag">
+              {venue === "neutral" ? "⚖ neutral venue" : venue === "A" ? `${A.flag} ${A.name} home advantage` : `${B.flag} ${B.name} home advantage`}
+              {matchCity ? ` · ${matchCity}` : ""}
+            </span>
           </div>
-          {showTune && (<div style={{ marginTop: 12 }}>
-            <div className="tunerow"><div className="nm2">{A.flag} {A.name}</div><input type="range" min="1400" max="2150" value={rA} onChange={(e) => setRA(+e.target.value)} /><div className="val">{rA}</div></div>
-            <div className="tunerow"><div className="nm2">{B.flag} {B.name}</div><input type="range" min="1400" max="2150" value={rB} onChange={(e) => setRB(+e.target.value)} /><div className="val">{rB}</div></div>
-          </div>)}
-          {showMkt && (<div>
-            <div className="note" style={{ marginTop: 12 }}>Enter the book's American odds to see your edge (model % − market %).</div>
-            <div className="mktgrid">
-              <div className="mktfld"><label>{A.name} win</label><input value={mkt.a} onChange={(e) => setMkt({ ...mkt, a: e.target.value })} placeholder="-120" /></div>
-              <div className="mktfld"><label>Draw</label><input value={mkt.d} onChange={(e) => setMkt({ ...mkt, d: e.target.value })} placeholder="+240" /></div>
-              <div className="mktfld"><label>{B.name} win</label><input value={mkt.b} onChange={(e) => setMkt({ ...mkt, b: e.target.value })} placeholder="+650" /></div>
-              <div className="mktfld"><label>Over 2.5</label><input value={mkt.o25} onChange={(e) => setMkt({ ...mkt, o25: e.target.value })} placeholder="-105" /></div>
-              {mode === "knockout" && <div className="mktfld"><label>{A.name} advance</label><input value={mkt.adv} onChange={(e) => setMkt({ ...mkt, adv: e.target.value })} placeholder="-450" /></div>}
-            </div>
-          </div>)}
+          <div className="note" style={{ marginTop: 10, marginBottom: 0 }}>
+            Ratings, venue, and market odds are pulled in automatically — ratings from the
+            model's built-in strength table, venue from the fixture's host city, and market
+            odds from ESPN's live sportsbook feed when that fixture has one published.
+            {mktAuto ? "" : " No market odds are published for this matchup yet, so the edge comparison below is hidden until they are."}
+          </div>
         </div>
 
         {/* headline */}
         <div className="card">
           {liveModel && (
-            <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
+            <div key={tick} className="pulsing" style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}>● live · {liveModel.clock || "in play"}</span>
+                <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}><span className="livedot" />live · {liveModel.clock || "in play"}</span>
                 <span style={{ fontFamily: "'Bricolage Grotesque'", fontWeight: 800, fontSize: 20 }}>{A.name} {liveModel.curA} – {liveModel.curB} {B.name}</span>
               </div>
-              <div className="note" style={{ marginTop: 8, marginBottom: 6 }}>Win probability recalculated from the current score + time remaining — not the pre-match forecast.</div>
+              <div className="note" style={{ marginTop: 8, marginBottom: 6 }}>Win probability recalculated from the current score + time remaining, ticking every second.</div>
               <div className="bar">
                 <span style={{ width: `${liveModel.pA * 100}%`, background: MINT }}>{liveModel.pA > 0.12 ? p1(liveModel.pA) : ""}</span>
                 <span style={{ width: `${liveModel.pD * 100}%`, background: "#3a5f68", color: "#dff5ee" }}>{liveModel.pD > 0.12 ? p1(liveModel.pD) : ""}</span>
@@ -704,22 +762,56 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
         <div className="tabs">
           <button className={tab === "risk" ? "on" : ""} onClick={() => setTab("risk")}>Risk lab</button>
           <button className={tab === "scorers" ? "on" : ""} onClick={() => setTab("scorers")}>Goalscorers</button>
-          <button className={tab === "h2h" ? "on" : ""} onClick={() => setTab("h2h")}>Head-to-head</button>
           <button className={tab === "matrix" ? "on" : ""} onClick={() => setTab("matrix")}>Score matrix</button>
           <button className={tab === "track" ? "on" : ""} onClick={() => setTab("track")}>Track record</button>
-          <button className={tab === "readout" ? "on" : ""} onClick={() => setTab("readout")}>Readout</button>
         </div>
 
         {/* RISK LAB */}
         {tab === "risk" && (
           <div className="card">
             {liveMatch && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "8px 12px", borderRadius: 9, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
-                <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}>● live · {liveModel.clock}</span>
-                <span className="note" style={{ margin: 0 }}>every bet below is recalculating off the current score, ticking every second</span>
+              <div key={tick} className="pulsing" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "8px 12px", borderRadius: 9, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)", flexWrap: "wrap", gap: 6 }}>
+                <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}><span className="livedot" />live · {liveModel.clock}</span>
+                <span className="note" style={{ margin: 0 }}>every bet below updates off the current score, ticking every second</span>
               </div>
             )}
-            <div className="note" style={{ marginTop: 0, marginBottom: 14 }}>Educational only. Risk = the model's chance the bet LOSES. Longshots pay more because they lose more often — a pick is only sharp if the model beats the market's implied %.</div>
+
+            {/* split scoreboard: Team A stats on the left, Team B stats on the right */}
+            <div key={liveMatch ? tick : "static"} className={liveMatch ? "pulsing" : ""}>
+              <div className="split">
+                <div className="splitcol" style={{ borderColor: MINT + "40" }}>
+                  <div className="splitname" style={{ color: MINT }}>{A.flag} {A.name}</div>
+                  <div className="splitbig" style={{ color: MINT }}>{p1(activeS.pA)}</div>
+                  <div className="splitlab">win probability</div>
+                  <div className="splitrow"><span>xG</span><b>{xgA.toFixed(2)}</b></div>
+                  <div className="splitrow"><span>Clean sheet</span><b>{p1(activeS.csA)}</b></div>
+                  <div className="splitrow"><span>Over 1.5 (own)</span><b>{p1(activeS.aOver15)}</b></div>
+                  {scorersA[0] && <div className="splitrow"><span>Top scorer</span><b>{scorersA[0].n} {Math.round(scorersA[0].p * 100)}%</b></div>}
+                </div>
+                <div className="splitmid">
+                  <div className="splitbig" style={{ color: "var(--dim)", fontSize: 26 }}>{p1(activeS.pD)}</div>
+                  <div className="splitlab">draw</div>
+                  <div className="splitdash">{liveMatch ? `${liveModel.curA}–${liveModel.curB}` : `${Math.round(lA)}–${Math.round(lB)}`}</div>
+                  <div className="splitlab">{liveMatch ? "current score" : "projected score"}</div>
+                </div>
+                <div className="splitcol" style={{ borderColor: CORAL + "40" }}>
+                  <div className="splitname" style={{ color: CORAL }}>{B.flag} {B.name}</div>
+                  <div className="splitbig" style={{ color: CORAL }}>{p1(activeS.pB)}</div>
+                  <div className="splitlab">win probability</div>
+                  <div className="splitrow"><span>xG</span><b>{xgB.toFixed(2)}</b></div>
+                  <div className="splitrow"><span>Clean sheet</span><b>{p1(activeS.csB)}</b></div>
+                  <div className="splitrow"><span>Over 1.5 (own)</span><b>{p1(activeS.bOver15)}</b></div>
+                  {scorersB[0] && <div className="splitrow"><span>Top scorer</span><b>{scorersB[0].n} {Math.round(scorersB[0].p * 100)}%</b></div>}
+                </div>
+              </div>
+              {h2h && h2h.played > 0 && (
+                <div className="note" style={{ textAlign: "center", marginTop: 8 }}>
+                  Head-to-head: {A.name} {h2h.aWins} · draws {h2h.draws} · {B.name} {h2h.bWins} ({h2h.played} meetings)
+                </div>
+              )}
+            </div>
+
+            <div className="note" style={{ marginTop: 16, marginBottom: 14 }}>Educational only. Risk = the model's chance the bet LOSES. Longshots pay more because they lose more often — a pick is only sharp if the model beats the market's implied %.</div>
             <div className="rf">
               <div><label>Bet type</label>
                 <select value={bet} onChange={(e) => setBet(e.target.value)}>
@@ -761,8 +853,8 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
                 <select value={selPlayer ? selPlayer.n : ""} onChange={(e) => setPlayer(e.target.value)}>
                   {playersPool.map((p) => <option key={p.tag + p.n} value={p.n}>{p.n} ({p.team})</option>)}
                 </select></div>)}
-              <div><label>Market odds for this bet (optional)</label>
-                <input value={betMkt} onChange={(e) => setBetMkt(e.target.value)} placeholder="e.g. +180 or -140" /></div>
+              <div><label>Market odds for this bet</label>
+                <div className="autoodds">{autoBetOdds ? `${autoBetOdds} (auto, ESPN)` : "not published for this bet"}</div></div>
             </div>
 
             <div className="riskhead">
@@ -792,41 +884,6 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>
         )}
 
-        {tab === "h2h" && (
-          <div className="card">
-            <h4 style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 14, color: "var(--dim)" }}>
-              {A.flag} {A.name} vs {B.flag} {B.name} · head-to-head
-            </h4>
-            {h2h ? (
-              h2h.played === 0 ? (
-                <div className="empty" style={{ fontSize: 14 }}>{h2h.note || "No prior meetings on record."}</div>
-              ) : (
-                <>
-                  <div className="h2hbig">
-                    <div><div className="num" style={{ color: MINT }}>{h2h.aWins}</div><div className="lab">{A.name} wins</div></div>
-                    <div><div className="num" style={{ color: "var(--dim)" }}>{h2h.draws}</div><div className="lab">draws</div></div>
-                    <div><div className="num" style={{ color: CORAL }}>{h2h.bWins}</div><div className="lab">{B.name} wins</div></div>
-                  </div>
-                  <div className="note" style={{ textAlign: "center" }}>{h2h.played} meetings{h2h.note ? ` · ${h2h.note}` : ""}</div>
-                </>
-              )
-            ) : (
-              <div className="empty" style={{ fontSize: 13.5, lineHeight: 1.6 }}>
-                Historical head-to-head loads from the live feed once the backend is deployed. Until then, here's the model's read on this matchup:
-              </div>
-            )}
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
-              <div className="note" style={{ marginTop: 0, marginBottom: 10 }}>Model's projected meeting</div>
-              <div className="bar">
-                <span style={{ width: `${s.pA * 100}%`, background: MINT }}>{s.pA > 0.12 ? p1(s.pA) : ""}</span>
-                <span style={{ width: `${s.pD * 100}%`, background: "#3a5f68", color: "#dff5ee" }}>{s.pD > 0.12 ? p1(s.pD) : ""}</span>
-                <span style={{ width: `${s.pB * 100}%`, background: CORAL }}>{s.pB > 0.12 ? p1(s.pB) : ""}</span>
-              </div>
-              <div className="barlabels"><span>{A.name} win</span><span>draw</span><span>{B.name} win</span></div>
-              <div className="note">Projected scoreline {Math.round(lA)}–{Math.round(lB)} · most likely {s.peak.i}–{s.peak.j} ({Math.round(s.peak.p * 100)}%) · xG {lA.toFixed(2)}/{lB.toFixed(2)}.</div>
-            </div>
-          </div>
-        )}
 
         {tab === "matrix" && (
           <div className="card">
@@ -890,7 +947,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>
         )}
 
-        {tab === "readout" && <pre className="term">{readout}</pre>}
+
 
         <div className="disc">Ratings, scorer shares, schedule, bracket, and market snapshot are approximate and time-stamped. Deploy the backend for live nightly data. A model is an edge, not a lock. · 21+. Bet responsibly · 1-800-GAMBLER.</div>
       </div>

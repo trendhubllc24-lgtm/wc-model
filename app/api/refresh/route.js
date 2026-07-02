@@ -30,6 +30,7 @@ export async function GET(req) {
       day: new Date(g.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
       time: new Date(g.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) + " ET",
       a: g.home, b: g.away, city: g.city, stad: g.venue, round: g.round,
+      homeML: g.homeML, drawML: g.drawML, awayML: g.awayML, overUnder: g.overUnder,
     }));
 
     // Merge Polymarket + Kalshi by country name. Normalize both sides (trim,
