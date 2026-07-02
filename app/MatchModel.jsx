@@ -283,14 +283,25 @@ export default function MatchModel() {
     const fracLeft = Math.max(0.02, (90 - minutesPlayed) / 90);
     const rlA = lA * fracLeft, rlB = lB * fracLeft;      // remaining expected goals
     const rGrid = buildGrid(Math.max(0.05, rlA), Math.max(0.05, rlB));
-    // convolve the current score with the remaining-time grid
+    // Shift the remaining-time grid by the current score to get a full
+    // final-score grid — same shape as the pre-match `grid`, so every Risk
+    // Lab bet type (exact score, over/under, margins, team totals...) can
+    // use this directly instead of just the three-way win/draw/loss split.
+    const liveGrid = [];
+    for (let i = 0; i <= MAXG; i++) { liveGrid[i] = []; for (let j = 0; j <= MAXG; j++) liveGrid[i][j] = 0; }
+    for (let i = 0; i <= MAXG; i++) for (let j = 0; j <= MAXG; j++) {
+      const fi = curA + i, fj = curB + j;
+      if (fi <= MAXG && fj <= MAXG) liveGrid[fi][fj] += rGrid[i][j];
+      // scores beyond the grid's max are vanishingly rare; safe to drop
+    }
+    const liveS = summarize(liveGrid);
     let pA = 0, pD = 0, pB = 0;
     for (let i = 0; i <= MAXG; i++) for (let j = 0; j <= MAXG; j++) {
       const fi = curA + i, fj = curB + j, p = rGrid[i][j];
       if (fi > fj) pA += p; else if (fi < fj) pB += p; else pD += p;
     }
     const liveClock = `${Math.floor(minutesPlayed)}'`;
-    return { curA, curB, minutesPlayed, pA, pD, pB, clock: liveClock };
+    return { curA, curB, minutesPlayed, pA, pD, pB, clock: liveClock, liveGrid, liveS, remA: rlA, remB: rlB };
     // eslint-disable-next-line
   }, [liveMatch, lA, lB, tick]);
 
@@ -366,25 +377,34 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   ];
   const selPlayer = playersPool.find((p) => p.n === player) || playersPool[0];
 
+  // Whenever the loaded matchup is actually live, every Risk Lab bet resolves
+  // off the live-adjusted grid/summary (current score + time remaining) —
+  // ticking every second — instead of the frozen pre-match numbers.
+  const activeGrid = liveMatch ? liveModel.liveGrid : grid;
+  const activeS = liveMatch ? liveModel.liveS : s;
+  const activeAdvA = liveMatch ? liveModel.pA : advA; // regulation-only during live; ET/pens layer applies pre-match
+  const xgA = liveMatch ? liveModel.remA : lA;
+  const xgB = liveMatch ? liveModel.remB : lB;
+
   function resolveBet() {
     switch (bet) {
-      case "winA": return { p: s.pA, title: `${A.name} win (90')` };
-      case "draw": return { p: s.pD, title: "Draw (90')" };
-      case "winB": return { p: s.pB, title: `${B.name} win (90')` };
-      case "dcA": return { p: s.pA + s.pD, title: `${A.name} win or draw` };
-      case "dcB": return { p: s.pB + s.pD, title: `${B.name} win or draw` };
-      case "advA": return { p: advA ?? s.pA, title: `${A.name} to advance` };
-      case "advB": return { p: advA != null ? 1 - advA : s.pB, title: `${B.name} to advance` };
-      case "exact": return { p: (grid[si] && grid[si][sj]) || 0, title: `Exact score ${A.name} ${si}-${sj} ${B.name}` };
-      case "ou": { const o = overFrom(s.tot, ouLine); return { p: ouSide === "over" ? o : 1 - o, title: `${ouSide === "over" ? "Over" : "Under"} ${ouLine} total goals` }; }
-      case "btts": return { p: s.btts, title: "Both teams to score — yes" };
-      case "bttsNo": return { p: 1 - s.btts, title: "Both teams to score — no" };
-      case "tt": { const arr = ttTeam === "A" ? s.margA : s.margB; const tn = ttTeam === "A" ? A.name : B.name; return { p: overFrom(arr, ttLine), title: `${tn} over ${ttLine} goals` }; }
-      case "marginA": return { p: s.sprA, title: `${A.name} to win by 2+` };
-      case "marginB": return { p: s.sprB, title: `${B.name} to win by 2+` };
-      case "pScore": return { p: anytime(selPlayer.xg, selPlayer.share), title: `${selPlayer.n} to score anytime` };
-      case "pBrace": { const mu = selPlayer.xg * selPlayer.share; return { p: brace(mu), title: `${selPlayer.n} to score 2+` }; }
-      case "pAssist": { const aS = CREATORS[selPlayer.n] ?? 0.08; return { p: anytime(selPlayer.xg, aS), title: `${selPlayer.n} to record an assist`, approx: true }; }
+      case "winA": return { p: activeS.pA, title: `${A.name} win (90')` };
+      case "draw": return { p: activeS.pD, title: "Draw (90')" };
+      case "winB": return { p: activeS.pB, title: `${B.name} win (90')` };
+      case "dcA": return { p: activeS.pA + activeS.pD, title: `${A.name} win or draw` };
+      case "dcB": return { p: activeS.pB + activeS.pD, title: `${B.name} win or draw` };
+      case "advA": return { p: activeAdvA ?? activeS.pA, title: `${A.name} to advance` };
+      case "advB": return { p: activeAdvA != null ? 1 - activeAdvA : activeS.pB, title: `${B.name} to advance` };
+      case "exact": return { p: (activeGrid[si] && activeGrid[si][sj]) || 0, title: `Exact score ${A.name} ${si}-${sj} ${B.name}` };
+      case "ou": { const o = overFrom(activeS.tot, ouLine); return { p: ouSide === "over" ? o : 1 - o, title: `${ouSide === "over" ? "Over" : "Under"} ${ouLine} total goals` }; }
+      case "btts": return { p: activeS.btts, title: "Both teams to score — yes" };
+      case "bttsNo": return { p: 1 - activeS.btts, title: "Both teams to score — no" };
+      case "tt": { const arr = ttTeam === "A" ? activeS.margA : activeS.margB; const tn = ttTeam === "A" ? A.name : B.name; return { p: overFrom(arr, ttLine), title: `${tn} over ${ttLine} goals` }; }
+      case "marginA": return { p: activeS.sprA, title: `${A.name} to win by 2+` };
+      case "marginB": return { p: activeS.sprB, title: `${B.name} to win by 2+` };
+      case "pScore": { const xg = selPlayer.tag === "A" ? xgA : xgB; return { p: anytime(xg, selPlayer.share), title: `${selPlayer.n} to score anytime${liveMatch ? " (rest of match)" : ""}` }; }
+      case "pBrace": { const xg = selPlayer.tag === "A" ? xgA : xgB; const mu = xg * selPlayer.share; return { p: brace(mu), title: `${selPlayer.n} to score 2+${liveMatch ? " (rest of match)" : ""}` }; }
+      case "pAssist": { const xg = selPlayer.tag === "A" ? xgA : xgB; const aS = CREATORS[selPlayer.n] ?? 0.08; return { p: anytime(xg, aS), title: `${selPlayer.n} to record an assist${liveMatch ? " (rest of match)" : ""}`, approx: true }; }
       default: return { p: 0, title: "" };
     }
   }
@@ -693,6 +713,12 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
         {/* RISK LAB */}
         {tab === "risk" && (
           <div className="card">
+            {liveMatch && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "8px 12px", borderRadius: 9, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
+                <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}>● live · {liveModel.clock}</span>
+                <span className="note" style={{ margin: 0 }}>every bet below is recalculating off the current score, ticking every second</span>
+              </div>
+            )}
             <div className="note" style={{ marginTop: 0, marginBottom: 14 }}>Educational only. Risk = the model's chance the bet LOSES. Longshots pay more because they lose more often — a pick is only sharp if the model beats the market's implied %.</div>
             <div className="rf">
               <div><label>Bet type</label>
