@@ -240,13 +240,22 @@ export default function MatchModel() {
   // Venue auto-derives from the loaded fixture's city — nothing to pick manually.
   const venue = autoVenue(matchCity, teamA, teamB);
 
-  // ---- backend wiring: pull live snapshot on load (falls back to embedded) ----
+  // ---- backend wiring: pull live snapshot on load, then keep polling ----
+  // A one-time fetch alone means the Live Prediction Tracker only updates
+  // when someone reloads the page or hits Refresh. Polling every 60s picks
+  // up newly-graded predictions (and bracket progress) automatically as
+  // soon as the backend's frequent track-sync job runs.
   useEffect(() => {
-    let ok = true; setFeed("loading");
-    fetch("/api/snapshot").then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (ok && d && d.winner) { setLive(d); setFeed("live"); } else setFeed("offline");
-    }).catch(() => { if (ok) setFeed("offline"); });
-    return () => { ok = false; };
+    let ok = true;
+    const pull = (first) => {
+      if (first) setFeed("loading");
+      fetch("/api/snapshot").then((r) => (r.ok ? r.json() : null)).then((d) => {
+        if (ok && d && d.winner) { setLive(d); setFeed("live"); } else if (first) setFeed("offline");
+      }).catch(() => { if (ok && first) setFeed("offline"); });
+    };
+    pull(true);
+    const id = setInterval(() => pull(false), 60000);
+    return () => { ok = false; clearInterval(id); };
   }, []);
 
   // ---- live scores: sync real ESPN data every 10s, ANCHOR a per-second ----
@@ -469,6 +478,8 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;margin-top:20px}
   .main{min-width:0}
   .side{position:sticky;top:20px;min-width:0}
+  .livesticky{position:sticky;top:20px;z-index:5}
+  @media(max-width:980px){.livesticky{position:relative;top:0}}
   @media(max-width:980px){.layout{grid-template-columns:1fr}.side{position:static}}
   .eyebrow{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.28em;color:var(--mint);text-transform:uppercase;margin-bottom:8px}
   .title{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:clamp(32px,8.5vw,54px);line-height:.92;letter-spacing:-.02em}
@@ -616,7 +627,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
 
         {/* ===================== LIVE NOW ===================== */}
         {liveGames.length > 0 && (
-          <div className="card" style={{ borderColor: CORAL }}>
+          <div className="card livesticky" style={{ borderColor: CORAL }}>
             <div className="snaphead">
               <h3 style={{ color: CORAL }}>● Live now</h3>
               <span className="note" style={{ margin: 0 }}>synced every 10s · live prob. ticks every second</span>
