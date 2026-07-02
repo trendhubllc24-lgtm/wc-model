@@ -476,7 +476,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
     --mint:${MINT};--coral:${CORAL};--amber:${AMBER};background:var(--bg);color:var(--ink);
     min-height:100vh;font-family:'Space Grotesk',system-ui,sans-serif;padding:22px 14px 60px;
     background-image:radial-gradient(circle at 50% -8%,#12333a 0%,var(--bg) 46%)}
-  .wrap{max-width:1180px;margin:0 auto}
+  .wrap{max-width:820px;margin:0 auto}
   .layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;margin-top:20px}
   .main{min-width:0}
   .side{position:sticky;top:20px;min-width:0}
@@ -627,9 +627,6 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
       <div className="wrap">
         <div className="eyebrow">World Cup 2026 · pre-kickoff model</div>
         <h1 className="title">MATCH<br />MODEL</h1>
-
-        <div className="layout">
-        <div className="main">
 
         {/* ===================== LIVE NOW ===================== */}
         <div className={liveGames.length > 0 ? "card livesticky" : "card livesticky liveempty"} style={{ borderColor: liveGames.length > 0 ? CORAL : "var(--line)" }}>
@@ -856,7 +853,79 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>
         )}
 
+        {/* ===================== TOURNAMENT ===================== */}
+        <div className="card">
+          <div className="snaphead">
+            <h3>Tournament · snapshot {snap.asOf || SNAPSHOT.asOf}</h3>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span className="feedtag" style={{ color: feed === "live" ? MINT : "var(--dim)", borderColor: feed === "live" ? MINT : "var(--line)" }}>
+                {feed === "live" ? "● live feed" : feed === "loading" ? "…syncing" : "○ snapshot"}
+              </span>
+              <button className="refresh" onClick={refresh}>↻ Refresh</button>
+            </div>
+          </div>
+          <div className="subtabs">
+            {seg2("upcoming", ttab, setTtab, "Upcoming")}
+            {seg2("schedule", ttab, setTtab, "Schedule")}
+            {seg2("bracket", ttab, setTtab, "Bracket")}
+          </div>
+
+          {ttab === "upcoming" && (<>
+            <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Every confirmed game still to come · tap any match to load it into the model.</div>
+            {schedule.map((fx, k) => (
+              <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
+                <div className="when">{fx.day}<br />{fx.time}</div>
+                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
+                <div className="place">{fx.city}<br />{fx.stad}</div>
+              </div>
+            ))}
+            <div className="snapcol" style={{ marginTop: 16 }}><h5>Golden Boot race (Polymarket)</h5>
+              {(snap.boot || SNAPSHOT.boot).map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono"><b>{w[1]}%</b></span></div>))}
+            </div>
+            <div className="note">{snap.note || SNAPSHOT.note} {feed !== "live" ? "Deploy the backend for live ESPN + Polymarket + Kalshi pulls each night." : `Updated ${refreshed || "just now"}.`}</div>
+          </>)}
+
+          {ttab === "schedule" && (<>
+            <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Tap any fixture to load it straight into the model.</div>
+            {schedule.map((fx, k) => (
+              <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
+                <div className="when">{fx.day}<br />{fx.time}</div>
+                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
+                <div className="place">{fx.city}<br />{fx.stad}</div>
+              </div>
+            ))}
+          </>)}
+
+          {ttab === "bracket" && (<div className="brk">
+            <h5>Into the Round of 16</h5>
+            <div className="chips">{qualified.map((t, k) => <span className="qchip" key={k}>{flag(t)} {t}</span>)}</div>
+            {[["Round of 16", r16fx], ["Quarterfinals", qfFx], ["Semifinals", sfFx], ["Third Place", thirdFx], ["Final", finalFx]].map(([title, list], gi) => (
+              list.length > 0 && (
+                <div key={gi}>
+                  <h5 style={{ marginTop: 16 }}>{title} — confirmed ties</h5>
+                  {list.map((m, k) => (
+                    <div className="r16row" key={k} onClick={() => m.decided !== false && byName(m.a) && byName(m.b) && loadFixture(m)} style={{ cursor: m.decided !== false ? "pointer" : "default", flexWrap: "wrap" }}>
+                      <div className="t">{flag(m.a)} {disp(m.a)}</div><div className="mid">vs</div><div className="t">{flag(m.b)} {disp(m.b)}</div>
+                      <div className="pl">{m.when} · {m.stad}, {m.city}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ))}
+            <h5 style={{ marginTop: 16 }}>Round of 32 — still to play</h5>
+            {schedule.map((fx, k) => (
+              <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
+                <div className="when">{fx.day}</div>
+                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}</div>
+                <div className="place">{fx.city}</div>
+              </div>
+            ))}
+            <h5 style={{ marginTop: 18 }}>Market futures — to win it all</h5>
+            {snap.winner.map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono">Poly <b>{w[1]}%</b> · Kalshi <b>{w[2]}%</b></span></div>))}
+            <div className="note">Bracket reflects the {snap.asOf || SNAPSHOT.asOf} snapshot. The live feed advances winners automatically.</div>
+          </div>)}
         </div>
+
         {/* ===================== LIVE PREDICTION TRACKER ===================== */}
         <div className="card">
           <h3 style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: AMBER, marginBottom: 12 }}>Live prediction tracker</h3>
@@ -917,14 +986,15 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
                 90-minute result. Most recent first — tap a match to see both models' full picks.
               </div>
               {filtered.length === 0 && <div className="empty">No {trackFilter} in the graded history yet.</div>}
-              {filtered.slice(0, 20).map((p, k) => {
-                const isOpen = expandedMatch === p.id;
+              {filtered.map((p, k) => {
+                const matchKey = p.a + "|" + p.b + "|" + p.date;
+                const isOpen = expandedMatch === matchKey;
                 return (
                   <div key={k}>
                     <div
                       className="fxrow"
                       style={{ borderColor: p.correct ? MINT + "55" : CORAL + "55" }}
-                      onClick={() => setExpandedMatch(isOpen ? null : p.id)}
+                      onClick={() => setExpandedMatch(isOpen ? null : matchKey)}
                     >
                       <div className="when" style={{ color: p.correct ? MINT : CORAL, fontWeight: 700 }}>
                         {p.correct ? "✓" : "✗"}{p.gbt ? (p.gbt.correct ? " / ✓" : " / ✗") : ""}
@@ -964,86 +1034,6 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
             </>);
           })()}
         </div>
-
-        {/* end .main */}
-
-        <aside className="side">
-          {/* ===================== TOURNAMENT ===================== */}
-          <div className="card">
-            <div className="snaphead">
-              <h3>Tournament · snapshot {snap.asOf || SNAPSHOT.asOf}</h3>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span className="feedtag" style={{ color: feed === "live" ? MINT : "var(--dim)", borderColor: feed === "live" ? MINT : "var(--line)" }}>
-                  {feed === "live" ? "● live feed" : feed === "loading" ? "…syncing" : "○ snapshot"}
-                </span>
-                <button className="refresh" onClick={refresh}>↻ Refresh</button>
-              </div>
-            </div>
-            <div className="subtabs">
-              {seg2("upcoming", ttab, setTtab, "Upcoming")}
-              {seg2("schedule", ttab, setTtab, "Schedule")}
-              {seg2("bracket", ttab, setTtab, "Bracket")}
-            </div>
-
-            {ttab === "upcoming" && (<>
-              <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Every confirmed game still to come · tap any match to load it into the model.</div>
-              {schedule.map((fx, k) => (
-                <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
-                  <div className="when">{fx.day}<br />{fx.time}</div>
-                  <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
-                  <div className="place">{fx.city}<br />{fx.stad}</div>
-                </div>
-              ))}
-              <div className="snapcol" style={{ marginTop: 16 }}><h5>Golden Boot race (Polymarket)</h5>
-                {(snap.boot || SNAPSHOT.boot).map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono"><b>{w[1]}%</b></span></div>))}
-              </div>
-              <div className="note">{snap.note || SNAPSHOT.note} {feed !== "live" ? "Deploy the backend for live ESPN + Polymarket + Kalshi pulls each night." : `Updated ${refreshed || "just now"}.`}</div>
-            </>)}
-
-            {ttab === "schedule" && (<>
-              <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Tap any fixture to load it straight into the model.</div>
-              {schedule.map((fx, k) => (
-                <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
-                  <div className="when">{fx.day}<br />{fx.time}</div>
-                  <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
-                  <div className="place">{fx.city}<br />{fx.stad}</div>
-                </div>
-              ))}
-            </>)}
-
-            {ttab === "bracket" && (<div className="brk">
-              <h5>Into the Round of 16</h5>
-              <div className="chips">{qualified.map((t, k) => <span className="qchip" key={k}>{flag(t)} {t}</span>)}</div>
-              {[["Round of 16", r16fx], ["Quarterfinals", qfFx], ["Semifinals", sfFx], ["Third Place", thirdFx], ["Final", finalFx]].map(([title, list], gi) => (
-                list.length > 0 && (
-                  <div key={gi}>
-                    <h5 style={{ marginTop: 16 }}>{title} — confirmed ties</h5>
-                    {list.map((m, k) => (
-                      <div className="r16row" key={k} onClick={() => m.decided !== false && byName(m.a) && byName(m.b) && loadFixture(m)} style={{ cursor: m.decided !== false ? "pointer" : "default", flexWrap: "wrap" }}>
-                        <div className="t">{flag(m.a)} {disp(m.a)}</div><div className="mid">vs</div><div className="t">{flag(m.b)} {disp(m.b)}</div>
-                        <div className="pl">{m.when} · {m.stad}, {m.city}</div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              ))}
-              <h5 style={{ marginTop: 16 }}>Round of 32 — still to play</h5>
-              {schedule.map((fx, k) => (
-                <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
-                  <div className="when">{fx.day}</div>
-                  <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}</div>
-                  <div className="place">{fx.city}</div>
-                </div>
-              ))}
-              <h5 style={{ marginTop: 18 }}>Market futures — to win it all</h5>
-              {snap.winner.map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono">Poly <b>{w[1]}%</b> · Kalshi <b>{w[2]}%</b></span></div>))}
-              <div className="note">Bracket reflects the {snap.asOf || SNAPSHOT.asOf} snapshot. The live feed advances winners automatically.</div>
-            </div>)}
-          </div>
-        </aside>
-        </div>
-        {/* end .layout */}
-
 
         <div className="disc">Ratings, scorer shares, schedule, bracket, and market snapshot are approximate and time-stamped. Deploy the backend for live nightly data. A model is an edge, not a lock. · 21+. Bet responsibly · 1-800-GAMBLER.</div>
       </div>
