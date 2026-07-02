@@ -517,7 +517,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
     60%{box-shadow:0 0 0 10px rgba(255,107,92,0)}
     100%{box-shadow:0 0 0 0 rgba(255,107,92,0)}
   }
-  .pulsing{animation:pulseGlow 1s ease-out}
+  .pulsing{animation:pulseGlow 1.6s ease-in-out infinite}
   @keyframes dotBlink{0%,100%{opacity:1}50%{opacity:.25}}
   .livedot{display:inline-block;width:7px;height:7px;border-radius:50%;background:${CORAL};
     margin-right:6px;animation:dotBlink 1.1s ease-in-out infinite}
@@ -727,7 +727,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
         {/* headline */}
         <div className="card">
           {liveModel && (
-            <div key={tick} className="pulsing" style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
+            <div className="pulsing" style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                 <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}><span className="livedot" />live · {liveModel.clock || "in play"}</span>
                 <span style={{ fontFamily: "'Bricolage Grotesque'", fontWeight: 800, fontSize: 20 }}>{A.name} {liveModel.curA} – {liveModel.curB} {B.name}</span>
@@ -770,14 +770,14 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
         {tab === "risk" && (
           <div className="card">
             {liveMatch && (
-              <div key={tick} className="pulsing" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "8px 12px", borderRadius: 9, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)", flexWrap: "wrap", gap: 6 }}>
+              <div className="pulsing" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "8px 12px", borderRadius: 9, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)", flexWrap: "wrap", gap: 6 }}>
                 <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}><span className="livedot" />live · {liveModel.clock}</span>
                 <span className="note" style={{ margin: 0 }}>every bet below updates off the current score, ticking every second</span>
               </div>
             )}
 
             {/* split scoreboard: Team A stats on the left, Team B stats on the right */}
-            <div key={liveMatch ? tick : "static"} className={liveMatch ? "pulsing" : ""}>
+            <div className={liveMatch ? "pulsing" : ""}>
               <div className="split">
                 <div className="splitcol" style={{ borderColor: MINT + "40" }}>
                   <div className="splitname" style={{ color: MINT }}>{A.flag} {A.name}</div>
