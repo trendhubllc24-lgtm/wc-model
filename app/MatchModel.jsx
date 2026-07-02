@@ -222,16 +222,32 @@ export default function MatchModel() {
     return () => { ok = false; };
   }, []);
 
-  // ---- live scores: poll a lightweight always-fresh endpoint every 25s ----
+  // ---- live scores: sync real ESPN data every 10s, ANCHOR a per-second ----
+  // clock in between syncs. ESPN's own data doesn't change every second (their
+  // game clock updates roughly every 15-30s), so polling them once a second
+  // wouldn't get fresher data — it would just hammer their servers for
+  // nothing and risk getting the site rate-limited. Instead: sync real data
+  // every 10s, and tick a local clock every 1s in between so the live win
+  // probability visibly moves every second, always corrected by the next
+  // real sync.
   const [liveGames, setLiveGames] = useState([]);
+  const [syncedAt, setSyncedAt] = useState(null);
+  const [tick, setTick] = useState(0);
+
   useEffect(() => {
     let ok = true;
     const pull = () => fetch("/api/live").then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (ok && d && d.live) setLiveGames(d.live); }).catch(() => {});
+      .then((d) => { if (ok && d && d.live) { setLiveGames(d.live); setSyncedAt(Date.now()); } }).catch(() => {});
     pull();
-    const id = setInterval(pull, 25000);
+    const id = setInterval(pull, 10000);
     return () => { ok = false; clearInterval(id); };
   }, []);
+
+  useEffect(() => {
+    if (liveGames.length === 0) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [liveGames.length]);
 
   const M = useMemo(() => {
     const [lA, lB, diff] = deriveLambdas(rA, rB, venue);
@@ -252,13 +268,18 @@ export default function MatchModel() {
 
   // If the loaded matchup is currently being played, recompute win probability
   // live from the CURRENT score + time remaining instead of the pre-match read.
+  // minutesPlayed advances every second locally (from `tick`), anchored to the
+  // real ESPN clock at the last sync — so it's live-feeling but never drifts
+  // far from the truth before the next 10s correction.
   const liveMatch = liveGames.find((g) => (g.a === teamA && g.b === teamB) || (g.a === teamB && g.b === teamA));
   const liveModel = useMemo(() => {
     if (!liveMatch) return null;
     const flipped = liveMatch.a === teamB; // ESPN's home/away may not match our A/B order
     const curA = flipped ? liveMatch.bScore : liveMatch.aScore;
     const curB = flipped ? liveMatch.aScore : liveMatch.bScore;
-    const minutesPlayed = Math.min(90, (liveMatch.period === 2 ? 45 : 0) + (parseInt(liveMatch.clock) || 0));
+    const baseMinute = (liveMatch.period === 2 ? 45 : 0) + (parseInt(liveMatch.clock) || 0);
+    const secsSinceSync = syncedAt ? (Date.now() - syncedAt) / 1000 : 0;
+    const minutesPlayed = Math.min(90, baseMinute + secsSinceSync / 60);
     const fracLeft = Math.max(0.02, (90 - minutesPlayed) / 90);
     const rlA = lA * fracLeft, rlB = lB * fracLeft;      // remaining expected goals
     const rGrid = buildGrid(Math.max(0.05, rlA), Math.max(0.05, rlB));
@@ -268,8 +289,10 @@ export default function MatchModel() {
       const fi = curA + i, fj = curB + j, p = rGrid[i][j];
       if (fi > fj) pA += p; else if (fi < fj) pB += p; else pD += p;
     }
-    return { curA, curB, minutesPlayed, pA, pD, pB, clock: liveMatch.clock };
-  }, [liveMatch, lA, lB]);
+    const liveClock = `${Math.floor(minutesPlayed)}'`;
+    return { curA, curB, minutesPlayed, pA, pD, pB, clock: liveClock };
+    // eslint-disable-next-line
+  }, [liveMatch, lA, lB, tick]);
 
   const refresh = () => {
     setNonce((n) => n + 1);
@@ -440,7 +463,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .prow{display:flex;align-items:center;gap:10px;margin-bottom:11px}
   .prow .nm{width:104px;font-size:13.5px;font-weight:600;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .prow .tk{flex:1;height:9px;background:var(--surf2);border-radius:6px;overflow:hidden}
-  .prow .fl{height:100%;border-radius:6px}
+  .prow .fl{display:block;height:100%;border-radius:6px}
   .prow .pp{font-family:'Space Mono';font-size:12px;width:42px;text-align:right}
   .empty{color:var(--dim);font-size:13px;font-family:'Space Mono';padding:8px 0}
   .note{color:var(--dim);font-size:11px;font-family:'Space Mono';margin-top:10px;line-height:1.55}
@@ -498,11 +521,6 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
       <div className="wrap">
         <div className="eyebrow">World Cup 2026 · pre-kickoff model</div>
         <h1 className="title">MATCH<br />MODEL</h1>
-        <p className="lede">
-          The tournament, the markets, and the math in one place — schedule, live bracket,
-          match forecasts, and a risk lab that shows how safe any bet really is.
-        </p>
-        <p className="credit">Inspired by @athena_huo's WC2026 project · independent build.</p>
 
         {/* ===================== TOURNAMENT ===================== */}
         <div className="card">
@@ -582,7 +600,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           <div className="card" style={{ borderColor: CORAL }}>
             <div className="snaphead">
               <h3 style={{ color: CORAL }}>● Live now</h3>
-              <span className="note" style={{ margin: 0 }}>auto-updates every 25s</span>
+              <span className="note" style={{ margin: 0 }}>synced every 10s · live prob. ticks every second</span>
             </div>
             {liveGames.map((g, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(g)} style={{ borderColor: CORAL + "55" }}>
