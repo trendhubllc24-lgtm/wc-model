@@ -27,8 +27,8 @@ export async function GET(req) {
 
     const upcoming = slate.filter((g) => g.state === "pre");
     const schedule = upcoming.map((g) => ({
-      day: new Date(g.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
-      time: new Date(g.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) + " ET",
+      day: new Date(g.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }),
+      time: new Date(g.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET",
       a: g.home, b: g.away, city: g.city, stad: g.venue, round: g.round,
       homeML: g.homeML, drawML: g.drawML, awayML: g.awayML, overUnder: g.overUnder,
     }));
@@ -45,13 +45,18 @@ export async function GET(req) {
     });
     const boot = bootPoly.slice(0, 4).map((p) => [p.label, Math.round(p.prob * 100)]);
 
-    // head-to-head keyed "TeamA|TeamB" (alphabetical), same as the frontend
+    // Head-to-head, keyed "TeamA|TeamB" (alphabetical), same as the frontend.
+    // Limited to the soonest 12 upcoming games and run in PARALLEL — doing
+    // this sequentially for the whole rest-of-tournament schedule is what
+    // caused the refresh to silently time out before.
+    const h2hTargets = upcoming.slice(0, 12);
+    const h2hResults = await Promise.all(h2hTargets.map((g) => getEspnH2H(g.id, g.home, g.away)));
     const h2h = {};
-    for (const g of upcoming) h2h[[g.home, g.away].sort().join("|")] = await getEspnH2H(g.home, g.away);
+    h2hTargets.forEach((g, i) => { h2h[[g.home, g.away].sort().join("|")] = h2hResults[i]; });
 
     const snapshot = {
       updatedAt: new Date().toISOString(),
-      asOf: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      asOf: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles" }),
       note: "Auto-updated from ESPN + Polymarket + Kalshi.",
       winner, boot, schedule, qualified, r16, qf, sf, third, final, h2h, live, track,
     };
