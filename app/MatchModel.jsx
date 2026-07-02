@@ -479,7 +479,8 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .wrap{max-width:1180px;margin:0 auto}
   .layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;margin-top:20px}
   .main{min-width:0}
-  .side{min-width:0}
+  .side{position:sticky;top:20px;min-width:0}
+  @media(max-width:980px){.side{position:static}}
   .livesticky{}
   @media(max-width:980px){.layout{grid-template-columns:1fr}.side{position:static}}
   .eyebrow{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.28em;color:var(--mint);text-transform:uppercase;margin-bottom:8px}
@@ -487,6 +488,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .lede{color:var(--dim);margin-top:12px;max-width:55ch;font-size:15px;line-height:1.5}
   .credit{font-family:'Space Mono',monospace;font-size:11px;color:var(--dim);margin-top:10px;line-height:1.6}
   .card{background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:20px}
+  .liveempty{opacity:.6;background:var(--surf2)}
   .snaphead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px}
   .snaphead h3{font-family:'Space Mono';font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);font-weight:700}
   .feedtag{font-family:'Space Mono';font-size:10px;letter-spacing:.1em;padding:3px 8px;border-radius:999px;border:1px solid var(--line)}
@@ -630,13 +632,13 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
         <div className="main">
 
         {/* ===================== LIVE NOW ===================== */}
-        {liveGames.length > 0 && (
-          <div className="card livesticky" style={{ borderColor: CORAL }}>
-            <div className="snaphead">
-              <h3 style={{ color: CORAL }}>● Live now</h3>
-              <span className="note" style={{ margin: 0 }}>synced every 10s · live prob. ticks every second</span>
-            </div>
-            {liveGames.map((g, k) => (
+        <div className={liveGames.length > 0 ? "card livesticky" : "card livesticky liveempty"} style={{ borderColor: liveGames.length > 0 ? CORAL : "var(--line)" }}>
+          <div className="snaphead">
+            <h3 style={{ color: liveGames.length > 0 ? CORAL : "var(--dim)" }}>{liveGames.length > 0 ? "● Live now" : "○ Live now"}</h3>
+            <span className="note" style={{ margin: 0 }}>synced every 10s · live prob. ticks every second</span>
+          </div>
+          {liveGames.length > 0 ? (
+            liveGames.map((g, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(g)} style={{ borderColor: CORAL + "55" }}>
                 <div className="when" style={{ color: CORAL, fontWeight: 700 }}>{g.clock || "LIVE"}</div>
                 <div className="match">
@@ -645,9 +647,11 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
                 </div>
                 <div className="place">{g.city}<br />{g.stad}</div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          ) : (
+            <div className="empty" style={{ padding: "18px 4px", textAlign: "center" }}>No live games currently — check back when a match kicks off.</div>
+          )}
+        </div>
 
 
         {/* ===================== MATCH SETUP ===================== */}
@@ -933,17 +937,23 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
                     </div>
                     {isOpen && (
                       <div className="evbox" style={{ marginTop: -4, marginBottom: 8 }}>
-                        <div style={{ marginBottom: 8 }}>
+                        <div style={{ marginBottom: p.correct ? 8 : 4 }}>
                           <b style={{ color: MINT }}>Baseline</b> — {disp(p.a)} {Math.round((p.pA ?? 0) * 100)}% · Draw {Math.round((p.pD ?? 0) * 100)}% · {disp(p.b)} {Math.round((p.pB ?? 0) * 100)}%
                           <span style={{ color: p.correct ? MINT : CORAL, marginLeft: 8 }}>{p.correct ? "✓ hit" : "✗ miss"}</span>
                         </div>
+                        {!p.correct && p.reason && (
+                          <div style={{ marginBottom: 10, color: "var(--dim)", fontSize: 12.5, lineHeight: 1.5, paddingLeft: 10, borderLeft: `2px solid ${CORAL}55` }}>{p.reason}</div>
+                        )}
                         {p.gbt ? (
-                          <div style={{ marginBottom: 8 }}>
+                          <div style={{ marginBottom: p.gbt.correct ? 8 : 4 }}>
                             <b style={{ color: CORAL }}>GBT</b> — {disp(p.a)} {Math.round((p.gbt.pA ?? 0) * 100)}% · Draw {Math.round((p.gbt.pD ?? 0) * 100)}% · {disp(p.b)} {Math.round((p.gbt.pB ?? 0) * 100)}%
                             <span style={{ color: p.gbt.correct ? MINT : CORAL, marginLeft: 8 }}>{p.gbt.correct ? "✓ hit" : "✗ miss"}</span>
                           </div>
                         ) : (
                           <div style={{ marginBottom: 8, color: "var(--dim)" }}>GBT pick not available for this match.</div>
+                        )}
+                        {p.gbt && !p.gbt.correct && p.gbt.reason && (
+                          <div style={{ marginBottom: 10, color: "var(--dim)", fontSize: 12.5, lineHeight: 1.5, paddingLeft: 10, borderLeft: `2px solid ${CORAL}55` }}>{p.gbt.reason}</div>
                         )}
                         <div style={{ color: "var(--dim)" }}>Actual result: <b>{p.actual === "A" ? disp(p.a) : p.actual === "B" ? disp(p.b) : "Draw"}</b></div>
                       </div>
