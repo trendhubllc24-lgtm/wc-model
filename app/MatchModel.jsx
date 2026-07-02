@@ -465,7 +465,11 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
     --mint:${MINT};--coral:${CORAL};--amber:${AMBER};background:var(--bg);color:var(--ink);
     min-height:100vh;font-family:'Space Grotesk',system-ui,sans-serif;padding:22px 14px 60px;
     background-image:radial-gradient(circle at 50% -8%,#12333a 0%,var(--bg) 46%)}
-  .wrap{max-width:880px;margin:0 auto}
+  .wrap{max-width:1180px;margin:0 auto}
+  .layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;margin-top:20px}
+  .main{min-width:0}
+  .side{position:sticky;top:20px;min-width:0}
+  @media(max-width:980px){.layout{grid-template-columns:1fr}.side{position:static}}
   .eyebrow{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.28em;color:var(--mint);text-transform:uppercase;margin-bottom:8px}
   .title{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:clamp(32px,8.5vw,54px);line-height:.92;letter-spacing:-.02em}
   .lede{color:var(--dim);margin-top:12px;max-width:55ch;font-size:15px;line-height:1.5}
@@ -607,78 +611,8 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
         <div className="eyebrow">World Cup 2026 · pre-kickoff model</div>
         <h1 className="title">MATCH<br />MODEL</h1>
 
-        {/* ===================== TOURNAMENT ===================== */}
-        <div className="card">
-          <div className="snaphead">
-            <h3>Tournament · snapshot {snap.asOf || SNAPSHOT.asOf}</h3>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span className="feedtag" style={{ color: feed === "live" ? MINT : "var(--dim)", borderColor: feed === "live" ? MINT : "var(--line)" }}>
-                {feed === "live" ? "● live feed" : feed === "loading" ? "…syncing" : "○ snapshot"}
-              </span>
-              <button className="refresh" onClick={refresh}>↻ Refresh</button>
-            </div>
-          </div>
-          <div className="subtabs">
-            {seg2("upcoming", ttab, setTtab, "Upcoming")}
-            {seg2("schedule", ttab, setTtab, "Schedule")}
-            {seg2("bracket", ttab, setTtab, "Bracket")}
-          </div>
-
-          {ttab === "upcoming" && (<>
-            <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Every confirmed game still to come · tap any match to load it into the model.</div>
-            {schedule.map((fx, k) => (
-              <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
-                <div className="when">{fx.day}<br />{fx.time}</div>
-                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
-                <div className="place">{fx.city}<br />{fx.stad}</div>
-              </div>
-            ))}
-            <div className="snapcol" style={{ marginTop: 16 }}><h5>Golden Boot race (Polymarket)</h5>
-              {(snap.boot || SNAPSHOT.boot).map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono"><b>{w[1]}%</b></span></div>))}
-            </div>
-            <div className="note">{snap.note || SNAPSHOT.note} {feed !== "live" ? "Deploy the backend for live ESPN + Polymarket + Kalshi pulls each night." : `Updated ${refreshed || "just now"}.`}</div>
-          </>)}
-
-          {ttab === "schedule" && (<>
-            <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Tap any fixture to load it straight into the model.</div>
-            {schedule.map((fx, k) => (
-              <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
-                <div className="when">{fx.day}<br />{fx.time}</div>
-                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
-                <div className="place">{fx.city}<br />{fx.stad}</div>
-              </div>
-            ))}
-          </>)}
-
-          {ttab === "bracket" && (<div className="brk">
-            <h5>Into the Round of 16</h5>
-            <div className="chips">{qualified.map((t, k) => <span className="qchip" key={k}>{flag(t)} {t}</span>)}</div>
-            {[["Round of 16", r16fx], ["Quarterfinals", qfFx], ["Semifinals", sfFx], ["Third Place", thirdFx], ["Final", finalFx]].map(([title, list], gi) => (
-              list.length > 0 && (
-                <div key={gi}>
-                  <h5 style={{ marginTop: 16 }}>{title} — confirmed ties</h5>
-                  {list.map((m, k) => (
-                    <div className="r16row" key={k} onClick={() => m.decided !== false && byName(m.a) && byName(m.b) && loadFixture(m)} style={{ cursor: m.decided !== false ? "pointer" : "default", flexWrap: "wrap" }}>
-                      <div className="t">{flag(m.a)} {disp(m.a)}</div><div className="mid">vs</div><div className="t">{flag(m.b)} {disp(m.b)}</div>
-                      <div className="pl">{m.when} · {m.stad}, {m.city}</div>
-                    </div>
-                  ))}
-                </div>
-              )
-            ))}
-            <h5 style={{ marginTop: 16 }}>Round of 32 — still to play</h5>
-            {schedule.map((fx, k) => (
-              <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
-                <div className="when">{fx.day}</div>
-                <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}</div>
-                <div className="place">{fx.city}</div>
-              </div>
-            ))}
-            <h5 style={{ marginTop: 18 }}>Market futures — to win it all</h5>
-            {snap.winner.map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono">Poly <b>{w[1]}%</b> · Kalshi <b>{w[2]}%</b></span></div>))}
-            <div className="note">Bracket reflects the {snap.asOf || SNAPSHOT.asOf} snapshot. The live feed advances winners automatically.</div>
-          </div>)}
-        </div>
+        <div className="layout">
+        <div className="main">
 
         {/* ===================== LIVE NOW ===================== */}
         {liveGames.length > 0 && (
@@ -699,6 +633,50 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
             ))}
           </div>
         )}
+
+        {/* ===================== LIVE PREDICTION TRACKER ===================== */}
+        <div className="card">
+          <h3 style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: AMBER, marginBottom: 12 }}>Live prediction tracker</h3>
+          {(() => {
+            const trk = live && live.track;
+            if (!trk || trk.total === 0) {
+              return (
+                <div className="empty" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
+                  No graded predictions yet. Every match the model forecasts from here
+                  forward gets logged automatically the moment it appears on the schedule,
+                  then graded pass/fail the moment it finishes — nobody enters anything by
+                  hand. Check back once a few matches have been played.
+                </div>
+              );
+            }
+            const acc = trk.accuracy;
+            const accColor = acc >= 0.6 ? MINT : acc >= 0.45 ? AMBER : CORAL;
+            return (<>
+              <div style={{ display: "flex", gap: 26, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                <div><div className="bigp" style={{ color: MINT, fontSize: 34 }}>{trk.correct}</div><div className="note" style={{ margin: 0 }}>correct</div></div>
+                <div><div className="bigp" style={{ color: CORAL, fontSize: 34 }}>{trk.incorrect}</div><div className="note" style={{ margin: 0 }}>incorrect</div></div>
+                <div><div className="bigp" style={{ color: accColor, fontSize: 34 }}>{Math.round(acc * 100)}%</div><div className="note" style={{ margin: 0 }}>hit rate · {trk.total} graded</div></div>
+              </div>
+              <div className="riskbar" style={{ marginTop: 4 }}>
+                <div className="rf2" style={{ width: `${acc * 100}%`, background: accColor, opacity: 0.85 }} />
+              </div>
+              <div className="note" style={{ marginTop: 14, marginBottom: 10 }}>
+                "Correct" = the model's highest-probability pick (win/draw/win) matched the actual
+                90-minute result. Most recent first.
+              </div>
+              {trk.history.slice(0, 6).map((p, k) => (
+                <div className="fxrow" key={k} style={{ cursor: "default", borderColor: p.correct ? MINT + "55" : CORAL + "55" }}>
+                  <div className="when" style={{ color: p.correct ? MINT : CORAL, fontWeight: 700 }}>{p.correct ? "✓ hit" : "✗ miss"}</div>
+                  <div className="match">
+                    {flag(p.a)} {disp(p.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(p.b)} {disp(p.b)}
+                    <div className="go" style={{ color: "var(--dim)" }}>final {p.finalScore} · picked {p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "draw"}</div>
+                  </div>
+                  <div className="place">{new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                </div>
+              ))}
+            </>);
+          })()}
+        </div>
 
         {/* ===================== MATCH SETUP ===================== */}
         <div className="card">
@@ -763,7 +741,6 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           <button className={tab === "risk" ? "on" : ""} onClick={() => setTab("risk")}>Risk lab</button>
           <button className={tab === "scorers" ? "on" : ""} onClick={() => setTab("scorers")}>Goalscorers</button>
           <button className={tab === "matrix" ? "on" : ""} onClick={() => setTab("matrix")}>Score matrix</button>
-          <button className={tab === "track" ? "on" : ""} onClick={() => setTab("track")}>Track record</button>
         </div>
 
         {/* RISK LAB */}
@@ -903,50 +880,85 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>
         )}
 
-        {tab === "track" && (
-          <div className="card">
-            {(() => {
-              const trk = live && live.track;
-              if (!trk || trk.total === 0) {
-                return (
-                  <div className="empty" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
-                    No graded predictions yet. Every match the model forecasts from here
-                    forward gets logged automatically the moment it appears on the schedule,
-                    then graded pass/fail the moment it finishes — nobody enters anything by
-                    hand. Check back once a few matches have been played.
-                  </div>
-                );
-              }
-              const acc = trk.accuracy;
-              const accColor = acc >= 0.6 ? MINT : acc >= 0.45 ? AMBER : CORAL;
-              return (<>
-                <div style={{ display: "flex", gap: 26, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
-                  <div><div className="bigp" style={{ color: MINT, fontSize: 40 }}>{trk.correct}</div><div className="note" style={{ margin: 0 }}>correct</div></div>
-                  <div><div className="bigp" style={{ color: CORAL, fontSize: 40 }}>{trk.incorrect}</div><div className="note" style={{ margin: 0 }}>incorrect</div></div>
-                  <div><div className="bigp" style={{ color: accColor, fontSize: 40 }}>{Math.round(acc * 100)}%</div><div className="note" style={{ margin: 0 }}>hit rate · {trk.total} graded</div></div>
-                </div>
-                <div className="riskbar" style={{ marginTop: 4 }}>
-                  <div className="rf2" style={{ width: `${acc * 100}%`, background: accColor, opacity: 0.85 }} />
-                </div>
-                <div className="note" style={{ marginTop: 14, marginBottom: 10 }}>
-                  "Correct" = the model's highest-probability pick (win/draw/win) matched the actual
-                  90-minute result. Most recent first.
-                </div>
-                {trk.history.map((p, k) => (
-                  <div className="fxrow" key={k} style={{ cursor: "default", borderColor: p.correct ? MINT + "55" : CORAL + "55" }}>
-                    <div className="when" style={{ color: p.correct ? MINT : CORAL, fontWeight: 700 }}>{p.correct ? "✓ hit" : "✗ miss"}</div>
-                    <div className="match">
-                      {flag(p.a)} {disp(p.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(p.b)} {disp(p.b)}
-                      <div className="go" style={{ color: "var(--dim)" }}>final {p.finalScore} · picked {p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "draw"}</div>
-                    </div>
-                    <div className="place">{new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-                  </div>
-                ))}
-              </>);
-            })()}
-          </div>
-        )}
+        </div>
+        {/* end .main */}
 
+        <aside className="side">
+          {/* ===================== TOURNAMENT ===================== */}
+          <div className="card">
+            <div className="snaphead">
+              <h3>Tournament · snapshot {snap.asOf || SNAPSHOT.asOf}</h3>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span className="feedtag" style={{ color: feed === "live" ? MINT : "var(--dim)", borderColor: feed === "live" ? MINT : "var(--line)" }}>
+                  {feed === "live" ? "● live feed" : feed === "loading" ? "…syncing" : "○ snapshot"}
+                </span>
+                <button className="refresh" onClick={refresh}>↻ Refresh</button>
+              </div>
+            </div>
+            <div className="subtabs">
+              {seg2("upcoming", ttab, setTtab, "Upcoming")}
+              {seg2("schedule", ttab, setTtab, "Schedule")}
+              {seg2("bracket", ttab, setTtab, "Bracket")}
+            </div>
+
+            {ttab === "upcoming" && (<>
+              <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Every confirmed game still to come · tap any match to load it into the model.</div>
+              {schedule.map((fx, k) => (
+                <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
+                  <div className="when">{fx.day}<br />{fx.time}</div>
+                  <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
+                  <div className="place">{fx.city}<br />{fx.stad}</div>
+                </div>
+              ))}
+              <div className="snapcol" style={{ marginTop: 16 }}><h5>Golden Boot race (Polymarket)</h5>
+                {(snap.boot || SNAPSHOT.boot).map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono"><b>{w[1]}%</b></span></div>))}
+              </div>
+              <div className="note">{snap.note || SNAPSHOT.note} {feed !== "live" ? "Deploy the backend for live ESPN + Polymarket + Kalshi pulls each night." : `Updated ${refreshed || "just now"}.`}</div>
+            </>)}
+
+            {ttab === "schedule" && (<>
+              <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Tap any fixture to load it straight into the model.</div>
+              {schedule.map((fx, k) => (
+                <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
+                  <div className="when">{fx.day}<br />{fx.time}</div>
+                  <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
+                  <div className="place">{fx.city}<br />{fx.stad}</div>
+                </div>
+              ))}
+            </>)}
+
+            {ttab === "bracket" && (<div className="brk">
+              <h5>Into the Round of 16</h5>
+              <div className="chips">{qualified.map((t, k) => <span className="qchip" key={k}>{flag(t)} {t}</span>)}</div>
+              {[["Round of 16", r16fx], ["Quarterfinals", qfFx], ["Semifinals", sfFx], ["Third Place", thirdFx], ["Final", finalFx]].map(([title, list], gi) => (
+                list.length > 0 && (
+                  <div key={gi}>
+                    <h5 style={{ marginTop: 16 }}>{title} — confirmed ties</h5>
+                    {list.map((m, k) => (
+                      <div className="r16row" key={k} onClick={() => m.decided !== false && byName(m.a) && byName(m.b) && loadFixture(m)} style={{ cursor: m.decided !== false ? "pointer" : "default", flexWrap: "wrap" }}>
+                        <div className="t">{flag(m.a)} {disp(m.a)}</div><div className="mid">vs</div><div className="t">{flag(m.b)} {disp(m.b)}</div>
+                        <div className="pl">{m.when} · {m.stad}, {m.city}</div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ))}
+              <h5 style={{ marginTop: 16 }}>Round of 32 — still to play</h5>
+              {schedule.map((fx, k) => (
+                <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
+                  <div className="when">{fx.day}</div>
+                  <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}</div>
+                  <div className="place">{fx.city}</div>
+                </div>
+              ))}
+              <h5 style={{ marginTop: 18 }}>Market futures — to win it all</h5>
+              {snap.winner.map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono">Poly <b>{w[1]}%</b> · Kalshi <b>{w[2]}%</b></span></div>))}
+              <div className="note">Bracket reflects the {snap.asOf || SNAPSHOT.asOf} snapshot. The live feed advances winners automatically.</div>
+            </div>)}
+          </div>
+        </aside>
+        </div>
+        {/* end .layout */}
 
 
         <div className="disc">Ratings, scorer shares, schedule, bracket, and market snapshot are approximate and time-stamped. Deploy the backend for live nightly data. A model is an edge, not a lock. · 21+. Bet responsibly · 1-800-GAMBLER.</div>
