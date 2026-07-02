@@ -565,6 +565,9 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .axname b{color:var(--ink)}
   .h2hbig{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0 4px}
   .split{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch}
+  .dualtrack{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .dualcol{border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;background:var(--surf2)}
+  .dualname{font-family:'Space Mono';font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-bottom:8px}
   .splitcol{border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center;background:var(--surf2)}
   .splitname{font-weight:700;font-size:15px;margin-bottom:8px}
   .splitbig{font-family:'Bricolage Grotesque';font-weight:800;font-size:38px;line-height:1;
@@ -599,7 +602,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .evbox{margin-top:14px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--surf2);font-size:13px;line-height:1.5}
   .evbox b{font-family:'Space Mono'}
   .disc{font-family:'Space Mono';font-size:11px;color:var(--dim);line-height:1.6;margin-top:26px;text-align:center;border-top:1px solid var(--line);padding-top:18px}
-  @media(max-width:560px){.snapgrid,.scorers,.mktgrid,.rf,.setup{}.snapgrid,.scorers,.mktgrid,.rf{grid-template-columns:1fr}.split{grid-template-columns:1fr}.splitmid{padding:6px 0}.cell{font-size:9px}.prow .nm{width:88px}.fxrow .place{font-size:10px}}`;
+  @media(max-width:560px){.snapgrid,.scorers,.mktgrid,.rf,.setup{}.snapgrid,.scorers,.mktgrid,.rf{grid-template-columns:1fr}.split{grid-template-columns:1fr}.dualtrack{grid-template-columns:1fr}.splitmid{padding:6px 0}.cell{font-size:9px}.prow .nm{width:88px}.fxrow .place{font-size:10px}}`;
 
   const seg = (val, cur, set, label) => <button className={cur === val ? "on" : ""} onClick={() => set(val)}>{label}</button>;
   const scorerCol = (team, list, color) => (
@@ -855,6 +858,7 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           <h3 style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: AMBER, marginBottom: 12 }}>Live prediction tracker</h3>
           {(() => {
             const trk = live && live.track;
+            const trkGbt = live && live.trackGbt;
             if (!trk || trk.total === 0) {
               return (
                 <div className="empty" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
@@ -867,30 +871,46 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
             }
             const acc = trk.accuracy;
             const accColor = acc >= 0.6 ? MINT : acc >= 0.45 ? AMBER : CORAL;
-            const filtered = trk.history.filter((p) =>
+            const gbtReady = trkGbt && trkGbt.modelTrained;
+            const gbtHasData = gbtReady && trkGbt.total > 0;
+            const gbtAcc = gbtHasData ? trkGbt.accuracy : null;
+            const gbtColor = gbtAcc == null ? "var(--dim)" : gbtAcc >= 0.6 ? MINT : gbtAcc >= 0.45 ? AMBER : CORAL;
+
+            // merge both models' histories by match id so each row can show
+            // both a baseline verdict and a GBT verdict for the same game
+            const gbtById = {};
+            if (trkGbt) for (const p of trkGbt.history) gbtById[p.a + "|" + p.b + "|" + p.date] = p;
+            const merged = trk.history.map((p) => ({ ...p, gbt: gbtById[p.a + "|" + p.b + "|" + p.date] || null }));
+            const filtered = merged.filter((p) =>
               trackFilter === "all" ? true : trackFilter === "hits" ? p.correct : !p.correct
             );
+
             return (<>
-              <div style={{ display: "flex", gap: 26, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
-                <div><div className="bigp" style={{ color: MINT, fontSize: 34 }}>{trk.correct}</div><div className="note" style={{ margin: 0 }}>correct</div></div>
-                <div><div className="bigp" style={{ color: CORAL, fontSize: 34 }}>{trk.incorrect}</div><div className="note" style={{ margin: 0 }}>incorrect</div></div>
-                <div><div className="bigp" style={{ color: accColor, fontSize: 34 }}>{Math.round(acc * 100)}%</div><div className="note" style={{ margin: 0 }}>hit rate · {trk.total} graded</div></div>
+              <div className="dualtrack">
+                <div className="dualcol" style={{ borderColor: MINT + "40" }}>
+                  <div className="dualname" style={{ color: MINT }}>Baseline (Elo+Poisson)</div>
+                  <div className="splitbig" style={{ color: accColor, fontSize: 32 }}>{Math.round(acc * 100)}%</div>
+                  <div className="splitlab">hit rate · {trk.correct}✓ {trk.incorrect}✗ · {trk.total} graded</div>
+                </div>
+                <div className="dualcol" style={{ borderColor: CORAL + "40" }}>
+                  <div className="dualname" style={{ color: CORAL }}>Gradient Boosted Trees</div>
+                  {!gbtReady && <div className="note" style={{ margin: "6px 0 0" }}>Model not trained yet — deploy /api/train to activate.</div>}
+                  {gbtReady && !gbtHasData && <div className="note" style={{ margin: "6px 0 0" }}>Trained, but no GBT-graded matches yet — check back soon.</div>}
+                  {gbtHasData && (<>
+                    <div className="splitbig" style={{ color: gbtColor, fontSize: 32 }}>{Math.round(gbtAcc * 100)}%</div>
+                    <div className="splitlab">hit rate · {trkGbt.correct}✓ {trkGbt.incorrect}✗ · {trkGbt.total} graded</div>
+                  </>)}
+                </div>
               </div>
-              <div className="riskbar" style={{ marginTop: 4 }}>
-                <div className="rf2" style={{ width: `${acc * 100}%`, background: accColor, opacity: 0.85 }} />
-              </div>
-              <div className="note" style={{ marginTop: 10, marginBottom: 4 }}>
-                Currently tracking the Elo+Poisson baseline model only — a second model's picks
-                will appear side-by-side here once it's wired into live grading.
-              </div>
+
               <div className="subtabs" style={{ marginTop: 12 }}>
-                {[["all", "All"], ["hits", "Hits"], ["misses", "Misses"]].map(([v, label]) => (
+                {[["all", "All"], ["hits", "Baseline hits"], ["misses", "Baseline misses"]].map(([v, label]) => (
                   <button key={v} className={trackFilter === v ? "on" : ""} onClick={() => setTrackFilter(v)}>{label}</button>
                 ))}
               </div>
               <div className="note" style={{ marginTop: 10, marginBottom: 10 }}>
-                "Correct" = the model's highest-probability pick (win/draw/win) matched the actual
-                90-minute result. Most recent first — tap a match for detail.
+                "Correct" = a model's highest-probability pick (win/draw/win) matched the actual
+                90-minute result. Most recent first — tap a match to see both models' full picks.
               </div>
               {filtered.length === 0 && <div className="empty">No {trackFilter} in the graded history yet.</div>}
               {filtered.slice(0, 20).map((p, k) => {
@@ -902,17 +922,30 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
                       style={{ borderColor: p.correct ? MINT + "55" : CORAL + "55" }}
                       onClick={() => setExpandedMatch(isOpen ? null : p.id)}
                     >
-                      <div className="when" style={{ color: p.correct ? MINT : CORAL, fontWeight: 700 }}>{p.correct ? "✓ hit" : "✗ miss"}</div>
+                      <div className="when" style={{ color: p.correct ? MINT : CORAL, fontWeight: 700 }}>
+                        {p.correct ? "✓" : "✗"}{p.gbt ? (p.gbt.correct ? " / ✓" : " / ✗") : ""}
+                      </div>
                       <div className="match">
                         {flag(p.a)} {disp(p.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(p.b)} {disp(p.b)}
-                        <div className="go" style={{ color: "var(--dim)" }}>final {p.finalScore} · picked {p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "draw"} {isOpen ? "▲" : "▼"}</div>
+                        <div className="go" style={{ color: "var(--dim)" }}>final {p.finalScore} · baseline picked {p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "draw"} {isOpen ? "▲" : "▼"}</div>
                       </div>
                       <div className="place">{new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
                     </div>
                     {isOpen && (
                       <div className="evbox" style={{ marginTop: -4, marginBottom: 8 }}>
-                        <div style={{ marginBottom: 6 }}><b>{disp(p.a)}</b> win: {Math.round((p.pA ?? 0) * 100)}% · <b>Draw</b>: {Math.round((p.pD ?? 0) * 100)}% · <b>{disp(p.b)}</b> win: {Math.round((p.pB ?? 0) * 100)}%</div>
-                        <div style={{ color: "var(--dim)" }}>Baseline (Elo+Poisson) pick: <b>{p.pick === "A" ? disp(p.a) : p.pick === "B" ? disp(p.b) : "Draw"}</b> · Actual result: <b>{p.actual === "A" ? disp(p.a) : p.actual === "B" ? disp(p.b) : "Draw"}</b></div>
+                        <div style={{ marginBottom: 8 }}>
+                          <b style={{ color: MINT }}>Baseline</b> — {disp(p.a)} {Math.round((p.pA ?? 0) * 100)}% · Draw {Math.round((p.pD ?? 0) * 100)}% · {disp(p.b)} {Math.round((p.pB ?? 0) * 100)}%
+                          <span style={{ color: p.correct ? MINT : CORAL, marginLeft: 8 }}>{p.correct ? "✓ hit" : "✗ miss"}</span>
+                        </div>
+                        {p.gbt ? (
+                          <div style={{ marginBottom: 8 }}>
+                            <b style={{ color: CORAL }}>GBT</b> — {disp(p.a)} {Math.round((p.gbt.pA ?? 0) * 100)}% · Draw {Math.round((p.gbt.pD ?? 0) * 100)}% · {disp(p.b)} {Math.round((p.gbt.pB ?? 0) * 100)}%
+                            <span style={{ color: p.gbt.correct ? MINT : CORAL, marginLeft: 8 }}>{p.gbt.correct ? "✓ hit" : "✗ miss"}</span>
+                          </div>
+                        ) : (
+                          <div style={{ marginBottom: 8, color: "var(--dim)" }}>GBT pick not available for this match.</div>
+                        )}
+                        <div style={{ color: "var(--dim)" }}>Actual result: <b>{p.actual === "A" ? disp(p.a) : p.actual === "B" ? disp(p.b) : "Draw"}</b></div>
                       </div>
                     )}
                   </div>

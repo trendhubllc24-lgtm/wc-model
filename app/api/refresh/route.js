@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { getEspnSlate, getEspnH2H, buildBracket, extractLiveGames, getPolymarket, getKalshi, updateTrackRecord } from "@/lib/sources";
+import { updateGbtTrackRecord } from "@/lib/gbtTracking";
 
 const redis = Redis.fromEnv(); // reads UPSTASH_REDIS_REST_URL + _TOKEN
 
@@ -24,6 +25,7 @@ export async function GET(req) {
     const { qualified, r16, qf, sf, third, final } = await buildBracket(slate);
     const live = extractLiveGames(slate);
     const track = await updateTrackRecord(redis, slate);
+    const trackGbt = await updateGbtTrackRecord(redis, slate);
 
     const upcoming = slate.filter((g) => g.state === "pre");
     const schedule = upcoming.map((g) => ({
@@ -58,7 +60,7 @@ export async function GET(req) {
       updatedAt: new Date().toISOString(),
       asOf: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles" }),
       note: "Auto-updated from ESPN + Polymarket + Kalshi.",
-      winner, boot, schedule, qualified, r16, qf, sf, third, final, h2h, live, track,
+      winner, boot, schedule, qualified, r16, qf, sf, third, final, h2h, live, track, trackGbt,
     };
     await redis.set("wc-snapshot", snapshot);
     return Response.json({ ok: true, updatedAt: snapshot.updatedAt });

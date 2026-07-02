@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { getEspnSlate, extractLiveGames, updateTrackRecord, buildBracket } from "@/lib/sources";
+import { updateGbtTrackRecord } from "@/lib/gbtTracking";
 
 const redis = Redis.fromEnv();
 
@@ -9,6 +10,8 @@ const redis = Redis.fromEnv();
 // endpoint only re-checks ESPN — grading any game that finished since the
 // last check — so the Live Prediction Tracker can update itself soon after
 // a final whistle instead of waiting for the next full nightly refresh.
+// GBT prediction is cheap (~30ms per match, tested) so it's safe to include
+// here too, not just in the heavier nightly refresh.
 export async function GET(req) {
   const authed = req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
   if (!authed) return new Response("unauthorized", { status: 401 });
@@ -16,6 +19,7 @@ export async function GET(req) {
   try {
     const slate = await getEspnSlate();
     const track = await updateTrackRecord(redis, slate);
+    const trackGbt = await updateGbtTrackRecord(redis, slate);
     const live = extractLiveGames(slate);
     const { qualified } = await buildBracket(slate);
 
@@ -24,10 +28,10 @@ export async function GET(req) {
     // through); the tournament-wide market data stays as the last full
     // refresh left it until the next nightly run.
     const existing = (await redis.get("wc-snapshot")) || {};
-    const snapshot = { ...existing, track, live, qualified, trackUpdatedAt: new Date().toISOString() };
+    const snapshot = { ...existing, track, trackGbt, live, qualified, trackUpdatedAt: new Date().toISOString() };
     await redis.set("wc-snapshot", snapshot);
 
-    return Response.json({ ok: true, trackTotal: track.total, updatedAt: snapshot.trackUpdatedAt });
+    return Response.json({ ok: true, trackTotal: track.total, trackGbtTotal: trackGbt.total, updatedAt: snapshot.trackUpdatedAt });
   } catch (err) {
     return Response.json({ ok: false, error: String(err) }, { status: 200 });
   }
