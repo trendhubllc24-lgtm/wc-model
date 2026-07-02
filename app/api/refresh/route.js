@@ -27,8 +27,8 @@ export async function GET(req) {
 
     const upcoming = slate.filter((g) => g.state === "pre");
     const schedule = upcoming.map((g) => ({
-      day: new Date(g.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }),
-      time: new Date(g.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET",
+      day: new Date(g.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Los_Angeles" }),
+      time: new Date(g.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }) + " PT",
       a: g.home, b: g.away, city: g.city, stad: g.venue, round: g.round,
       homeML: g.homeML, drawML: g.drawML, awayML: g.awayML, overUnder: g.overUnder,
     }));
