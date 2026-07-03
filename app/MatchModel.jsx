@@ -667,6 +667,27 @@ ${s.top.map((x) => `    ${A.name} ${x.i}-${x.j} ${B.name}  ${p1(x.p).padStart(6)
           ) : (
             <div className="empty" style={{ padding: "18px 4px", textAlign: "center" }}>No live games currently — check back when a match kicks off.</div>
           )}
+
+          {/* All live stats for the currently-loaded matchup, consolidated here
+              rather than scattered further down the page, whenever it's live. */}
+          {liveModel && (
+            <div className="pulsing" style={{ marginTop: 16, padding: 12, borderRadius: 10, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}><span className="livedot" />live · {liveModel.clock || "in play"} · {A.name} v {B.name}</span>
+                <span style={{ fontFamily: "'Bricolage Grotesque'", fontWeight: 800, fontSize: 20 }}>{A.name} {liveModel.curA} – {liveModel.curB} {B.name}</span>
+              </div>
+              <div className="note" style={{ marginTop: 8, marginBottom: 6 }}>Win probability recalculated from the current score + time remaining, ticking every second.</div>
+              <div className="bar">
+                <span style={{ width: `${liveModel.pA * 100}%`, background: MINT }}>{liveModel.pA > 0.12 ? p1(liveModel.pA) : ""}</span>
+                <span style={{ width: `${liveModel.pD * 100}%`, background: "#3a5f68", color: "#dff5ee" }}>{liveModel.pD > 0.12 ? p1(liveModel.pD) : ""}</span>
+                <span style={{ width: `${liveModel.pB * 100}%`, background: CORAL }}>{liveModel.pB > 0.12 ? p1(liveModel.pB) : ""}</span>
+              </div>
+              <div className="barlabels"><span>{A.name} win</span><span>draw</span><span>{B.name} win</span></div>
+              <div className="note" style={{ marginTop: 10 }}>
+                Real Kalshi in-play market % and a live play-by-play feed are coming — Kalshi's live-data API requires an account API key to access, which hasn't been wired in yet.
+              </div>
+            </div>
+          )}
         </div>
 
 
@@ -697,18 +718,8 @@ ${s.top.map((x) => `    ${A.name} ${x.i}-${x.j} ${B.name}  ${p1(x.p).padStart(6)
         {/* headline */}
         <div className="card">
           {liveModel && (
-            <div className="pulsing" style={{ marginBottom: 16, padding: 12, borderRadius: 10, border: `1px solid ${CORAL}`, background: "rgba(255,107,92,0.08)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                <span style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: CORAL, fontWeight: 700 }}><span className="livedot" />live · {liveModel.clock || "in play"}</span>
-                <span style={{ fontFamily: "'Bricolage Grotesque'", fontWeight: 800, fontSize: 20 }}>{A.name} {liveModel.curA} – {liveModel.curB} {B.name}</span>
-              </div>
-              <div className="note" style={{ marginTop: 8, marginBottom: 6 }}>Win probability recalculated from the current score + time remaining, ticking every second.</div>
-              <div className="bar">
-                <span style={{ width: `${liveModel.pA * 100}%`, background: MINT }}>{liveModel.pA > 0.12 ? p1(liveModel.pA) : ""}</span>
-                <span style={{ width: `${liveModel.pD * 100}%`, background: "#3a5f68", color: "#dff5ee" }}>{liveModel.pD > 0.12 ? p1(liveModel.pD) : ""}</span>
-                <span style={{ width: `${liveModel.pB * 100}%`, background: CORAL }}>{liveModel.pB > 0.12 ? p1(liveModel.pB) : ""}</span>
-              </div>
-              <div className="barlabels"><span>{A.name} win</span><span>draw</span><span>{B.name} win</span></div>
+            <div className="note" style={{ marginBottom: 10 }}>
+              This matchup is live — see the full live win probability at the top of the page. The numbers below are the original pre-match forecast.
             </div>
           )}
           <div className="bar">
