@@ -398,6 +398,12 @@ ${mode === "knockout" ? `
 ${Lr(` ${A.name} advances`, advA, edge(advA, mk.adv))}
 ${Lr(` ${B.name} advances`, 1 - advA)}
 ` : ""}
+ spread / goal difference (reg)
+${Lr(` ${A.name} by 1+`, s.pA)}
+${Lr(` ${A.name} by 2+`, s.sprA)}
+${Lr(` ${B.name} by 1+`, s.pB)}
+${Lr(` ${B.name} by 2+`, s.sprB)}
+
  total goals (regulation)
 ${Lr(" over 1.5", s.o15)}
 ${Lr(" over 2.5", s.o25, edge(s.o25, mk.o25))}
@@ -407,7 +413,10 @@ ${Lr(" over 3.5", s.o35)}
 ${Lr(` ${A.name} over 0.5`, s.aOver05)}
 ${Lr(` ${A.name} over 1.5`, s.aOver15)}
 ${Lr(` ${B.name} over 0.5`, s.bOver05)}
-${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
+${Lr(` ${B.name} over 1.5`, s.bOver15)}
+
+ ---------------- DETAILED SCORE LINES ----------------
+${s.top.map((x) => `    ${A.name} ${x.i}-${x.j} ${B.name}  ${p1(x.p).padStart(6)}`).join("\n")}`;
 
   const scorersA = (SCORERS[teamA] || []).map(([n, sh]) => ({ n, p: anytime(lA, sh) })).sort((a, b) => b.p - a.p);
   const scorersB = (SCORERS[teamB] || []).map(([n, sh]) => ({ n, p: anytime(lB, sh) })).sort((a, b) => b.p - a.p);
@@ -503,6 +512,9 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
   .snapgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
   .snapcol h5{font-family:'Space Mono';font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:9px}
   .srow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;font-size:13.5px}
+  .mstatrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;font-size:13.5px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .mstatrow b{font-family:'Space Mono';font-weight:700;color:var(--mint)}
+  .mstatmodel{font-family:'Space Mono';font-size:11px;color:var(--dim);white-space:nowrap}
   .srow .mono{font-family:'Space Mono';font-size:12px;color:var(--dim)}
   .srow .mono b{color:var(--ink)}
   .fxrow{display:flex;align-items:center;gap:10px;padding:11px 10px;border:1px solid var(--line);border-radius:11px;margin-bottom:8px;cursor:pointer;background:var(--surf2);transition:.12s}
@@ -716,11 +728,41 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>)}
         </div>
 
+        {/* ===================== KALSHI MARKET STATS ===================== */}
+        <div className="card">
+          <h3 style={{ fontFamily: "'Space Mono'", fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: AMBER, marginBottom: 12 }}>Kalshi &amp; market stats</h3>
+
+          {mktAuto ? (
+            <>
+              <div className="note" style={{ marginTop: 0, marginBottom: 10 }}>Live sportsbook odds for {A.name} v {B.name}, converted to implied probability, next to the model's own read.</div>
+              <div className="mstatrow"><span>{A.name} win</span><b>{mktAuto.a ? `${Math.round((mk.a ?? 0) * 100)}%` : "—"}</b><span className="mstatmodel">model {p1(s.pA)}</span></div>
+              <div className="mstatrow"><span>Draw</span><b>{mktAuto.d ? `${Math.round((mk.d ?? 0) * 100)}%` : "—"}</b><span className="mstatmodel">model {p1(s.pD)}</span></div>
+              <div className="mstatrow"><span>{B.name} win</span><b>{mktAuto.b ? `${Math.round((mk.b ?? 0) * 100)}%` : "—"}</b><span className="mstatmodel">model {p1(s.pB)}</span></div>
+              <div className="mstatrow"><span>Over 2.5 goals</span><b>{mktAuto.o25 ? `${Math.round((mk.o25 ?? 0) * 100)}%` : "—"}</b><span className="mstatmodel">model {p1(s.o25)}</span></div>
+            </>
+          ) : (
+            <div className="empty" style={{ marginBottom: 14 }}>No live sportsbook odds published yet for {A.name} v {B.name} — showing tournament-wide markets below.</div>
+          )}
+
+          <h5 style={{ fontFamily: "'Space Mono'", fontSize: 10, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--dim)", marginTop: 16, marginBottom: 8 }}>To win the tournament (Polymarket · Kalshi)</h5>
+          {(snap.winner || []).length === 0 && <div className="empty">Not published yet.</div>}
+          {(snap.winner || []).map((w, k) => (
+            <div className="mstatrow" key={k}><span>{w[0]}</span><b>{w[1]}%</b><span className="mstatmodel">Kalshi {w[2] === "—" ? "—" : `${w[2]}%`}</span></div>
+          ))}
+
+          <h5 style={{ fontFamily: "'Space Mono'", fontSize: 10, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--dim)", marginTop: 16, marginBottom: 8 }}>Golden Boot (Polymarket)</h5>
+          {(snap.boot || SNAPSHOT.boot).length === 0 && <div className="empty">Not published yet.</div>}
+          {(snap.boot || SNAPSHOT.boot).map((w, k) => (
+            <div className="mstatrow" key={k}><span>{w[0]}</span><b>{w[1]}%</b><span /></div>
+          ))}
+          <div className="note" style={{ marginTop: 12 }}>Market data auto-refreshes from ESPN's sportsbook feed, Polymarket, and Kalshi. Numbers reflect the most recent successful pull, timestamped {snap.asOf || SNAPSHOT.asOf}.</div>
+        </div>
+
         {/* tabs */}
         <div className="tabs">
           <button className={tab === "risk" ? "on" : ""} onClick={() => setTab("risk")}>Risk lab</button>
           <button className={tab === "scorers" ? "on" : ""} onClick={() => setTab("scorers")}>Goalscorers</button>
-          <button className={tab === "matrix" ? "on" : ""} onClick={() => setTab("matrix")}>Score matrix</button>
+          <button className={tab === "matrix" ? "on" : ""} onClick={() => setTab("matrix")}>Model props</button>
         </div>
 
         {/* RISK LAB */}
@@ -844,19 +886,10 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
 
         {tab === "matrix" && (
           <div className="card">
-            <div className="matrix">
-              <div className="mlab"></div>
-              {[0, 1, 2, 3, 4, 5].map((j) => <div key={"h" + j} className="mlab">{j}</div>)}
-              {[0, 1, 2, 3, 4, 5].flatMap((i) => [
-                <div key={"r" + i} className="mlab">{i}</div>,
-                ...[0, 1, 2, 3, 4, 5].map((j) => {
-                  const p = grid[i][j], isPeak = i === s.peak.i && j === s.peak.j;
-                  const alpha = Math.min(1, (p / maxCell) * 0.9 + 0.06);
-                  return <div key={i + "-" + j} className={"cell" + (isPeak ? " peak" : "")} style={{ background: isPeak ? AMBER : `rgba(79,216,176,${alpha})` }}>{p >= 0.02 ? Math.round(p * 100) : ""}</div>;
-                }),
-              ])}
+            <pre className="term">{readout}</pre>
+            <div className="note" style={{ marginTop: 12 }}>
+              "edge" = model % minus market %, shown wherever real market odds are available for this fixture. Positive edge means the model reads it more likely than the market's price implies.
             </div>
-            <div className="axname"><span>rows <b>{A.flag} {A.name}</b> goals</span><span>· cols <b>{B.flag} {B.name}</b> goals</span><span>· amber = most likely</span></div>
           </div>
         )}
 
