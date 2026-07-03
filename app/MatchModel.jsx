@@ -214,6 +214,8 @@ export default function MatchModel() {
   const [matchCity, setMatchCity] = useState(null);
   const [mktAuto, setMktAuto] = useState(null); // ESPN's real odds for the loaded fixture, auto-filled
   const [nonce, setNonce] = useState(0);
+  const [upcomingShown, setUpcomingShown] = useState(8);
+  const [scheduleShown, setScheduleShown] = useState(8);
   const [trackFilter, setTrackFilter] = useState("all");
   const [expandedMatch, setExpandedMatch] = useState(null);
   const [refreshed, setRefreshed] = useState(null);
@@ -476,7 +478,9 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
     --mint:${MINT};--coral:${CORAL};--amber:${AMBER};background:var(--bg);color:var(--ink);
     min-height:100vh;font-family:'Space Grotesk',system-ui,sans-serif;padding:22px 14px 60px;
     background-image:radial-gradient(circle at 50% -8%,#12333a 0%,var(--bg) 46%)}
-  .wrap{max-width:820px;margin:0 auto}
+  .wrap{max-width:1180px;margin:0 auto}
+  .layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;margin-top:0}
+  .main{min-width:0}
   .layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;margin-top:20px}
   .main{min-width:0}
   .side{position:sticky;top:20px;min-width:0}
@@ -627,6 +631,9 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
       <div className="wrap">
         <div className="eyebrow">World Cup 2026 · pre-kickoff model</div>
         <h1 className="title">MATCH<br />MODEL</h1>
+
+        <div className="layout">
+        <div className="main">
 
         {/* ===================== LIVE NOW ===================== */}
         <div className={liveGames.length > 0 ? "card livesticky" : "card livesticky liveempty"} style={{ borderColor: liveGames.length > 0 ? CORAL : "var(--line)" }}>
@@ -853,6 +860,10 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
           </div>
         )}
 
+        </div>
+        {/* end .main */}
+
+        <aside className="side">
         {/* ===================== TOURNAMENT ===================== */}
         <div className="card">
           <div className="snaphead">
@@ -872,13 +883,18 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
 
           {ttab === "upcoming" && (<>
             <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Every confirmed game still to come · tap any match to load it into the model.</div>
-            {schedule.map((fx, k) => (
+            {schedule.slice(0, upcomingShown).map((fx, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
                 <div className="when">{fx.day}<br />{fx.time}</div>
                 <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
                 <div className="place">{fx.city}<br />{fx.stad}</div>
               </div>
             ))}
+            {schedule.length > upcomingShown && (
+              <button className="link" style={{ margin: "4px 0 12px" }} onClick={() => setUpcomingShown((n) => n + 8)}>
+                + show 8 more ({schedule.length - upcomingShown} remaining)
+              </button>
+            )}
             <div className="snapcol" style={{ marginTop: 16 }}><h5>Golden Boot race (Polymarket)</h5>
               {(snap.boot || SNAPSHOT.boot).map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono"><b>{w[1]}%</b></span></div>))}
             </div>
@@ -887,13 +903,18 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
 
           {ttab === "schedule" && (<>
             <div className="note" style={{ marginTop: 4, marginBottom: 12 }}>Tap any fixture to load it straight into the model.</div>
-            {schedule.map((fx, k) => (
+            {schedule.slice(0, scheduleShown).map((fx, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
                 <div className="when">{fx.day}<br />{fx.time}</div>
                 <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}<div className="go">tap to model →</div></div>
                 <div className="place">{fx.city}<br />{fx.stad}</div>
               </div>
             ))}
+            {schedule.length > scheduleShown && (
+              <button className="link" style={{ margin: "4px 0" }} onClick={() => setScheduleShown((n) => n + 8)}>
+                + show 8 more ({schedule.length - scheduleShown} remaining)
+              </button>
+            )}
           </>)}
 
           {ttab === "bracket" && (<div className="brk">
@@ -913,13 +934,14 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
               )
             ))}
             <h5 style={{ marginTop: 16 }}>Round of 32 — still to play</h5>
-            {schedule.map((fx, k) => (
+            {schedule.slice(0, 6).map((fx, k) => (
               <div className="fxrow" key={k} onClick={() => loadFixture(fx)}>
                 <div className="when">{fx.day}</div>
                 <div className="match">{flag(fx.a)} {disp(fx.a)} <span style={{ color: "var(--dim)" }}>v</span> {flag(fx.b)} {disp(fx.b)}</div>
                 <div className="place">{fx.city}</div>
               </div>
             ))}
+            {schedule.length > 6 && <div className="note" style={{ marginTop: -4 }}>See the full list under the "Schedule" tab above.</div>}
             <h5 style={{ marginTop: 18 }}>Market futures — to win it all</h5>
             {snap.winner.map((w, k) => (<div className="srow" key={k}><span>{w[0]}</span><span className="mono">Poly <b>{w[1]}%</b> · Kalshi <b>{w[2]}%</b></span></div>))}
             <div className="note">Bracket reflects the {snap.asOf || SNAPSHOT.asOf} snapshot. The live feed advances winners automatically.</div>
@@ -1034,6 +1056,10 @@ ${Lr(` ${B.name} over 1.5`, s.bOver15)}`;
             </>);
           })()}
         </div>
+
+        </aside>
+        </div>
+        {/* end .layout */}
 
         <div className="disc">Ratings, scorer shares, schedule, bracket, and market snapshot are approximate and time-stamped. Deploy the backend for live nightly data. A model is an edge, not a lock. · 21+. Bet responsibly · 1-800-GAMBLER.</div>
       </div>
